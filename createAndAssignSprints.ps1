@@ -125,7 +125,7 @@ function Resolve-ProjectId {
         Write-Host "⚠ Unexpected response type: $typeName"
         if ($resp -is [string]) {
             Write-Host "---- Response (first 200 chars) ----"
-            Write-Host ($resp.Substring(0, [Math]::Min(1000, $resp.Length)))
+            Write-Host ($resp.Substring(0, [Math]::Min(5000, $resp.Length)))
             Write-Host "------------------------------------"
         }
         throw "Could not list projects from org '$Organization'. Likely auth/permission issue."
