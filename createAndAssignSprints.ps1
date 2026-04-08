@@ -115,7 +115,7 @@ else {
     $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
     $projectId = $projectInfo.id
 
-    Write-Host "ProjectInfo keys: $($projectInfo.PSObject.Properties.Name -join ', ')"
+    Write-Host ${Organization}
 
     if (-not $projectId) {
         throw "Failed to resolve project ID for project '$Project'"
