@@ -23,6 +23,7 @@ Write-Host "NumberOfSprints: $NumberOfSprints"
 Write-Host "SprintLengthDays: $SprintLengthDays"
 Write-Host "GapDays: $GapDays"
 Write-Host "AZURE_DEVOPS_EXT_PAT is set: $([bool]$env:AZURE_DEVOPS_EXT_PAT)`n"
+Write-Host "PAT length: $($env:AZURE_DEVOPS_EXT_PAT.Length)"
 
 # --- PAT / Auth ---
 if (-not $env:AZURE_DEVOPS_EXT_PAT) {
