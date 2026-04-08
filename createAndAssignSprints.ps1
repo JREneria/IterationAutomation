@@ -114,9 +114,6 @@ else {
     $projectInfoUri = "${Organization}/_apis/projects/${projectEsc}"
     $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
     $projectId = $projectInfo.id
-    Write-Host $projectInfoUri
-    Write-Host $projectInfo
-    Write-Host $projectId
 
     if (-not $projectId) {
         throw "Failed to resolve project ID for project '$Project'"
