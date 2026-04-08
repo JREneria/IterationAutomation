@@ -88,6 +88,7 @@ function Add-IterationToTeams {
 }
 
 function Resolve-ProjectId {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)][string]$Organization,
         [Parameter(Mandatory=$true)][string]$ProjectName
@@ -95,17 +96,45 @@ function Resolve-ProjectId {
 
     $Organization = $Organization.TrimEnd('/')
 
-    $listUri = "$Organization/_apis/projects?$top=1000&api-version=7.1"
-    $resp = Invoke-AdoRest -Method GET -Uri $listUri
+    $listUri = "$Organization/_apis/projects?`$top=1000&api-version=7.1"
+    Write-Host "GET $listUri"
+
+    try {
+        $resp = Invoke-AdoRest -Method GET -Uri $listUri
+    }
+    catch {
+        Write-Host "❌ Projects list call failed."
+        Write-Host "Exception: $($_.Exception.Message)"
+
+        # Try to extract HTTP status + response body (super useful)
+        if ($_.Exception.Response -and $_.Exception.Response.GetResponseStream()) {
+            try {
+                $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                $body = $reader.ReadToEnd()
+                Write-Host "---- Response Body (first 500 chars) ----"
+                Write-Host ($body.Substring(0, [Math]::Min(500, $body.Length)))
+                Write-Host "----------------------------------------"
+            } catch {}
+        }
+        throw
+    }
 
     if (-not $resp.value) {
-        throw "Could not list projects from org '$Organization'. Check PAT permissions and URL."
+        # If resp is a string/HTML, it will have Length and no value
+        $typeName = $resp.GetType().FullName
+        Write-Host "⚠ Unexpected response type: $typeName"
+        if ($resp -is [string]) {
+            Write-Host "---- Response (first 200 chars) ----"
+            Write-Host ($resp.Substring(0, [Math]::Min(200, $resp.Length)))
+            Write-Host "------------------------------------"
+        }
+        throw "Could not list projects from org '$Organization'. Likely auth/permission issue."
     }
 
     $match = $resp.value | Where-Object { $_.name -ieq $ProjectName } | Select-Object -First 1
     if (-not $match) {
         $names = ($resp.value | Select-Object -ExpandProperty name | Sort-Object) -join ", "
-        throw "Project '$ProjectName' not found in org '$Organization'. Available projects: $names"
+        throw "Project '$ProjectName' not found. Available projects: $names"
     }
 
     return $match.id
