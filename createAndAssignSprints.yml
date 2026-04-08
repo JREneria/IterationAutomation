@@ -54,7 +54,7 @@ steps:
   inputs:
     pwsh: true
     targetType: filePath
-    filePath: scripts/createAndAssignSprints.ps1
+    filePath: createAndAssignSprints.ps1
     arguments: >
       -Organization "${{ parameters.organization }}"
       -Project "${{ parameters.project }}"
