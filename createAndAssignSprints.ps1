@@ -111,7 +111,7 @@ else {
     Write-Host "No teams specified. Resolving ALL teams in the project..."
 
     # Get project ID
-    $projectInfoUri = "$Organization/_apis/projects/${projectEsc}"
+    $projectInfoUri = "${Organization}/_apis/projects/${projectEsc}"
     $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
     $projectId = $projectInfo.id
     Write-Host $projectInfoUri
