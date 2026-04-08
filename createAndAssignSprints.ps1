@@ -12,7 +12,7 @@ param(
     [Parameter(Mandatory = $false)][int]$SprintLengthDays = 5,
     [Parameter(Mandatory = $false)][int]$GapDays = 2
 )
-
+$Organization = $Organization.TrimEnd('/')
 Write-Host "`nValues provided to the script:"
 Write-Host "Organization: $Organization"
 Write-Host "Project: $Project"
