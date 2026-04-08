@@ -95,7 +95,7 @@ function Resolve-ProjectId {
 
     $Organization = $Organization.TrimEnd('/')
 
-    $listUri = "$Organization/_apis/projects?`$top=1000&api-version=7.1"
+    $listUri = "$Organization/_apis/projects?$top=1000&api-version=7.1"
     $resp = Invoke-AdoRest -Method GET -Uri $listUri
 
     if (-not $resp.value) {
