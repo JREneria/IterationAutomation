@@ -51,7 +51,6 @@ function Invoke-AdoRest {
     }
 }
 
-
 function Add-IterationToTeams {
     [CmdletBinding()]
     param(
@@ -88,6 +87,29 @@ function Add-IterationToTeams {
     }
 }
 
+function Resolve-ProjectId {
+    param(
+        [Parameter(Mandatory=$true)][string]$Organization,
+        [Parameter(Mandatory=$true)][string]$ProjectName
+    )
+
+    $Organization = $Organization.TrimEnd('/')
+
+    $listUri = "$Organization/_apis/projects?`$top=1000&api-version=7.1"
+    $resp = Invoke-AdoRest -Method GET -Uri $listUri
+
+    if (-not $resp.value) {
+        throw "Could not list projects from org '$Organization'. Check PAT permissions and URL."
+    }
+
+    $match = $resp.value | Where-Object { $_.name -ieq $ProjectName } | Select-Object -First 1
+    if (-not $match) {
+        $names = ($resp.value | Select-Object -ExpandProperty name | Sort-Object) -join ", "
+        throw "Project '$ProjectName' not found in org '$Organization'. Available projects: $names"
+    }
+
+    return $match.id
+}
 
 # --- Normalize / Encode path segments for REST URLs ---
 # REST URLs require URL-encoded project/team names if they contain spaces. [3](https://learn.microsoft.com/en-us/azure/devops/cli/troubleshooting?view=azure-devops)
@@ -111,16 +133,10 @@ else {
     Write-Host "No teams specified. Resolving ALL teams in the project..."
 
     # Get project ID
-    $projectInfoUri = "${Organization}/_apis/projects/${projectEsc}?api-version=7.1"
-    $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
-    $projectId = $projectInfo.id
-
-    Write-Host "projectInfo type: $($projectInfo.GetType().FullName)"
-
-    if ($projectInfo -is [string]) {
-        Write-Host "projectInfo looks like a string. First 200 chars:"
-        Write-Host ($projectInfo.Substring(0, [Math]::Min(200, $projectInfo.Length)))
-    }
+    # $projectInfoUri = "${Organization}/_apis/projects/${projectEsc}?api-version=7.1"
+    # $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
+    $projectId = Resolve-ProjectId -Organization $Organization -ProjectName $Project
+    Write-Host "Resolved Project ID: $projectId"
 
     if (-not $projectId) {
         throw "Failed to resolve project ID for project '$Project'"
