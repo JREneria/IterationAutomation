@@ -115,7 +115,12 @@ else {
     $projectInfo = Invoke-AdoRest -Method GET -Uri $projectInfoUri
     $projectId = $projectInfo.id
 
-    Write-Host "GET $projectInfoUri"
+    Write-Host "projectInfo type: $($projectInfo.GetType().FullName)"
+
+    if ($projectInfo -is [string]) {
+        Write-Host "projectInfo looks like a string. First 200 chars:"
+        Write-Host ($projectInfo.Substring(0, [Math]::Min(200, $projectInfo.Length)))
+    }
 
     if (-not $projectId) {
         throw "Failed to resolve project ID for project '$Project'"
