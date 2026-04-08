@@ -65,4 +65,4 @@ steps:
       -SprintLengthDays ${{ parameters.sprintLengthDays }}
       -GapDays ${{ parameters.gapDays }}
   env:
-    AZURE_DEVOPS_EXT_PAT: $(ADO_PAT)
+    AZURE_DEVOPS_EXT_PAT: $(AZURE_DEVOPS_EXT_PAT)
