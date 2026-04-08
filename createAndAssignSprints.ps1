@@ -45,7 +45,7 @@ function Invoke-AdoRest {
     )
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 20
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json -ContentType "application/json"
     } else {
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
     }
