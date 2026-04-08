@@ -1,0 +1,68 @@
+trigger: none   # Adhoc only (intentional – avoids accidental sprint creation)
+
+parameters:
+- name: organization
+  type: string
+  default: "https://dev.azure.com/wtw-bda-outsourcing-health-coremarket"
+
+- name: project
+  type: string
+  default: "Azure Boards Rollout 2"
+
+# Comma-separated Azure DevOps team names
+- name: teams
+  type: string
+  default: " "
+
+# Annual iteration (e.g. 2027)
+- name: yearOfIteration
+  type: number
+  default: 2027
+
+# First sprint start date (ISO format recommended)
+- name: startDate
+  type: string
+  default: "2027-01-04"
+
+# Number of sprints to create
+- name: numberOfSprints
+  type: number
+  default: 52
+
+# Sprint duration (business days)
+- name: sprintLengthDays
+  type: number
+  default: 5
+
+# Gap between sprints (usually weekends)
+- name: gapDays
+  type: number
+  default: 2
+
+variables:
+- name: effectiveTeams
+  value: ${{ parameters.teams }}
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- checkout: self
+
+- task: PowerShell@2
+  displayName: Create and assign sprints
+  inputs:
+    pwsh: true
+    targetType: filePath
+    filePath: scripts/createAndAssignSprints.ps1
+    arguments: >
+      -Organization "${{ parameters.organization }}"
+      -Project "${{ parameters.project }}"
+      -Teams "$(effectiveTeams)"
+      -YearOfIteration ${{ parameters.yearOfIteration }}
+      -StartDate "${{ parameters.startDate }}"
+      -NumberOfSprints ${{ parameters.numberOfSprints }}
+      -SprintLengthDays ${{ parameters.sprintLengthDays }}
+      -GapDays ${{ parameters.gapDays }}
+  env:
+    AZURE_DEVOPS_EXT_PAT: $(ADO_PAT)
