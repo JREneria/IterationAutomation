@@ -122,7 +122,7 @@ if ($yearNodeDeep -and $yearNodeDeep.children) {
 # =========================
 # 3) Create sprints under the year (REST) - NO ASSIGNMENT
 # =========================
-Write-Host "`n=== Creating sprints (no assignment) ==="
+Write-Host "`n=== Creating sprints ==="
 
 $startDateIteration = $StartDate
 
