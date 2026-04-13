@@ -1,13 +1,13 @@
 trigger: none   # Adhoc only (intentional – avoids accidental sprint creation)
 
 parameters:
-- name: organization
-  type: string
-  default: "https://dev.azure.com/wtw-bda-outsourcing-health-coremarket"
+# - name: organization
+#  type: string
+# default: "https://dev.azure.com/wtw-bda-outsourcing-health-coremarket"
 
-- name: project
-  type: string
-  default: "Azure Boards Rollout 2"
+#- name: project
+#  type: string
+#  default: "Azure Boards Rollout 2"
 
 # Annual iteration (e.g. 2027)
 - name: yearOfIteration
@@ -47,8 +47,8 @@ steps:
     targetType: filePath
     filePath: createSprint.ps1
     arguments: >
-      -Organization "${{ parameters.organization }}"
-      -Project "${{ parameters.project }}"
+      -Organization "$(System.TeamFoundationCollectionUri)"
+      -Project "$(System.TeamProject)"
       -YearOfIteration ${{ parameters.yearOfIteration }}
       -StartDate "${{ parameters.startDate }}"
       -NumberOfSprints ${{ parameters.numberOfSprints }}
