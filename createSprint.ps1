@@ -200,7 +200,7 @@ foreach ($w in $sprintWindows) {
 
     Write-Host "Creating sprint: $sprintName"
 
-    $createSprintUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations/$yearName?api-version=7.1"
+    $createSprintUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations/$yearName"
     $sprintBody = @{
         name = $sprintName
         attributes = @{
