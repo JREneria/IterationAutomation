@@ -39,10 +39,6 @@ parameters:
   type: number
   default: 2
 
-variables:
-- name: effectiveTeams
-  value: ${{ parameters.teams }}
-
 pool:
   vmImage: ubuntu-latest
 
@@ -58,7 +54,6 @@ steps:
     arguments: >
       -Organization "${{ parameters.organization }}"
       -Project "${{ parameters.project }}"
-      -Teams "$(effectiveTeams)"
       -YearOfIteration ${{ parameters.yearOfIteration }}
       -StartDate "${{ parameters.startDate }}"
       -NumberOfSprints ${{ parameters.numberOfSprints }}
