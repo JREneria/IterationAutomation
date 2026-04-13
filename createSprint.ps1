@@ -91,24 +91,6 @@ if (-not $yearNode) {
     if ($PSCmdlet.ShouldProcess($Project, "Create annual iteration $yearName")) {
         $yearNode = Invoke-AdoRest -Method POST -Uri $createYearUri -Body $yearBody
         Write-Host "Created annual iteration: $($yearNode.name)"
-        $yearNode = Invoke-AdoRest -Method POST -Uri $createYearUri -Body $yearBody
-        
-        Write-Host "DEBUG: yearNode type = $($yearNode.GetType().FullName)"
-        
-        # Print keys if it's an object
-        if ($yearNode -and $yearNode.PSObject -and $yearNode.PSObject.Properties) {
-            Write-Host "DEBUG: yearNode keys = $($yearNode.PSObject.Properties.Name -join ', ')"
-        }
-        
-        # Print raw content if it’s a string (often HTML/error)
-        if ($yearNode -is [string]) {
-            Write-Host "DEBUG: yearNode string preview:"
-            Write-Host ($yearNode.Substring(0, [Math]::Min(500, $yearNode.Length)))
-        }
-        
-        Write-Host "Created annual iteration name = '$($yearNode.name)'"
-        Write-Host "Created annual iteration identifier = '$($yearNode.identifier)'"
-        Write-Host "Created annual iteration path = '$($yearNode.path)'"
     }
 } else {
     Write-Host "Annual iteration '$yearName' already exists."
