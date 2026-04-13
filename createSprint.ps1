@@ -39,6 +39,40 @@ $headers = @{
     "Content-Type"= "application/json"
 }
 
+function Get-SprintWindowsToEndOfYear {
+    param(
+        [Parameter(Mandatory)][datetime]$StartDate,
+        [Parameter(Mandatory)][int]$SprintLengthDays,
+        [Parameter(Mandatory)][int]$GapDays,
+        [Parameter(Mandatory)][datetime]$EndDate
+    )
+
+    if ($SprintLengthDays -lt 1) { throw "SprintLengthDays must be >= 1" }
+    if ($GapDays -lt 0) { throw "GapDays must be >= 0" }
+
+    $windows = @()
+    $start = $StartDate.Date
+
+    while ($start -le $EndDate.Date) {
+        $finish = $start.AddDays($SprintLengthDays - 1)
+
+        # Policy A: clamp finish date to EndDate
+        if ($finish -gt $EndDate.Date) {
+            $finish = $EndDate.Date
+        }
+
+        $windows += [pscustomobject]@{
+            Start  = $start
+            Finish = $finish
+        }
+
+        # Next sprint start = finish + gap + 1
+        $start = $finish.AddDays($GapDays + 1)
+    }
+
+    return $windows
+}
+
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","DELETE")] [string]$Method,
@@ -123,14 +157,36 @@ if ($yearNodeDeep -and $yearNodeDeep.children) {
 # 3) Create sprints under the year (REST) - NO ASSIGNMENT
 # =========================
 Write-Host "`n=== Creating sprints ==="
+# Decide how many sprints we will create
+$yearEnd = Get-Date -Year $YearOfIteration -Month 12 -Day 31
 
-$startDateIteration = $StartDate
+if ($NumberOfSprints -gt 0) {
+    # Manual mode: create exactly N sprints
+    $sprintWindows = @()
+    $startDateIteration = $StartDate.Date
 
-for ($i = 1; $i -le $NumberOfSprints; $i++) {
+    for ($i=1; $i -le $NumberOfSprints; $i++) {
+        $finishDateIteration = $startDateIteration.AddDays($SprintLengthDays - 1)
+        $sprintWindows += [pscustomobject]@{ Start = $startDateIteration; Finish = $finishDateIteration }
+        $startDateIteration = $finishDateIteration.AddDays($GapDays + 1)
+    }
+}
+else {
+    # Auto mode: create until end of year
+    $sprintWindows = Get-SprintWindowsToEndOfYear `
+        -StartDate $StartDate `
+        -SprintLengthDays $SprintLengthDays `
+        -GapDays $GapDays `
+        -EndDate $yearEnd
 
-    $finishDateIteration = $startDateIteration.AddDays($SprintLengthDays - 1)
+    Write-Host "Auto-calculated sprint count: $($sprintWindows.Count) (from $($StartDate.Date) to $yearEnd)"
+}
 
-    # ISO week number (stable)
+foreach ($w in $sprintWindows) {
+
+    $startDateIteration = $w.Start
+    $finishDateIteration = $w.Finish
+
     $weekNumber = [System.Globalization.ISOWeek]::GetWeekOfYear($startDateIteration)
 
     $sprintName = "Week $weekNumber - " +
@@ -138,15 +194,13 @@ for ($i = 1; $i -le $NumberOfSprints; $i++) {
         $finishDateIteration.ToString("MM.dd.yyyy")
 
     if ($existingSprintByName.ContainsKey($sprintName)) {
-        Write-Host "Skipping (exists): $sprintName"
-        $startDateIteration = $finishDateIteration.AddDays($GapDays + 1)
+        Write-Host "Sprint exists: $sprintName. Skipping create."
         continue
     }
 
-    Write-Host "`nCreating sprint: $sprintName"
+    Write-Host "Creating sprint: $sprintName"
 
-    # Create sprint under year node: POST classificationnodes/Iterations/{year} [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/release/releases/list?view=azure-devops-rest-7.1)
-    $createSprintUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations/$yearName"
+    $createSprintUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations/$yearName?api-version=7.1"
     $sprintBody = @{
         name = $sprintName
         attributes = @{
@@ -155,16 +209,9 @@ for ($i = 1; $i -le $NumberOfSprints; $i++) {
         }
     }
 
-    if ($PSCmdlet.ShouldProcess($Project, "Create sprint $sprintName under $yearName")) {
-        $createdSprint = Invoke-AdoRest -Method POST -Uri $createSprintUri -Body $sprintBody
-        Write-Host "Created sprint: $($createdSprint.name)"
-
-        # Keep idempotency up-to-date within this run
-        $existingSprintByName[$sprintName] = $createdSprint.identifier
-    }
-
-    # Move to next sprint window
-    $startDateIteration = $finishDateIteration.AddDays($GapDays + 1)
+    $createdSprint = Invoke-AdoRest -Method POST -Uri $createSprintUri -Body $sprintBody
+    Write-Host "Creating sprint: $createdSprint.Name"
+    $existingSprintByName[$sprintName] = $createdSprint.identifier
 }
 
 Write-Host "`nDone (create only)."
