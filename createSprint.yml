@@ -41,7 +41,7 @@ steps:
 - checkout: self
 
 - task: PowerShell@2
-  displayName: Create and assign sprints
+  displayName: Create annual sprints
   inputs:
     pwsh: true
     targetType: filePath
