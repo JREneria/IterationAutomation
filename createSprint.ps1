@@ -210,7 +210,7 @@ foreach ($w in $sprintWindows) {
     }
 
     $createdSprint = Invoke-AdoRest -Method POST -Uri $createSprintUri -Body $sprintBody
-    Write-Host "Created sprint: $createdSprint.name"
+    Write-Host "Created sprint: $($createdSprint.name)"
     $existingSprintByName[$sprintName] = $createdSprint.identifier
 }
 
