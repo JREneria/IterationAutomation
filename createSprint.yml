@@ -9,11 +9,6 @@ parameters:
   type: string
   default: "Azure Boards Rollout 2"
 
-# Comma-separated Azure DevOps team names
-- name: teams
-  type: string
-  default: " "
-
 # Annual iteration (e.g. 2027)
 - name: yearOfIteration
   type: number
