@@ -22,7 +22,7 @@ parameters:
 # Number of sprints to create
 - name: numberOfSprints
   type: number
-  default: 52
+  default: 0
 
 # Sprint duration (business days)
 - name: sprintLengthDays
