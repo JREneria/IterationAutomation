@@ -102,9 +102,9 @@ function Get-SprintWindowsToEndOfYear {
         # Next sprint start = finish + gap + 1
         $start = $finish.AddDays($GapDays + 1)
     }
-
     return $windows
 }
+
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","DELETE")] [string]$Method,
