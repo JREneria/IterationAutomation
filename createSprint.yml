@@ -17,7 +17,7 @@ parameters:
 # First sprint start date (ISO format recommended)
 - name: startDate
   type: string
-  default: ""
+  default: "auto"
 
 # Number of sprints to create
 - name: numberOfSprints
