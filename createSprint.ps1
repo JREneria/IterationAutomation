@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Project,       # e.g. Azure Boards Rollout 2
 
     [Parameter(Mandatory = $true)][int]$YearOfIteration,
-    [Parameter(Mandatory = $true)][datetime]$StartDate,
+    [Parameter(Mandatory = $false)][datetime]$StartDate,
     [Parameter(Mandatory = $true)][int]$NumberOfSprints,
 
     [Parameter(Mandatory = $false)][int]$SprintLengthDays = 5,
@@ -37,6 +37,14 @@ $headers = @{
     Authorization = "Basic $base64"
     Accept        = "application/json;api-version=7.1"
     "Content-Type"= "application/json"
+}
+
+function Get-FirstMondayOfYear {
+  param([int]$Year)
+
+  $jan1 = Get-Date -Year $Year -Month 1 -Day 1
+  $offset = ([int][DayOfWeek]::Monday - [int]$jan1.DayOfWeek + 7) % 7
+  return $jan1.AddDays($offset).Date
 }
 
 function Get-SprintWindowsToEndOfYear {
@@ -106,6 +114,15 @@ if ($iterationsTree.children) {
     $yearNode = @($iterationsTree.children) | Where-Object { $_.name -eq $yearName } | Select-Object -First 1
 }
 
+# Default StartDate if missing/blank
+if ([string]::IsNullOrWhiteSpace($StartDate)) {
+  $StartDate = (Get-FirstMondayOfYear -Year $YearOfIteration).ToString("yyyy-MM-dd")
+  Write-Host "StartDate not provided. Using first Monday of $YearOfIteration => $StartDate"
+}
+
+# Convert to DateTime for the rest of your script
+$StartDateDt = [datetime]$StartDate
+
 if (-not $yearNode) {
     $yearStart  = Get-Date -Year $YearOfIteration -Month 1 -Day 1
     $yearFinish = Get-Date -Year $YearOfIteration -Month 12 -Day 31
@@ -163,7 +180,7 @@ $yearEnd = Get-Date -Year $YearOfIteration -Month 12 -Day 31
 if ($NumberOfSprints -gt 0) {
     # Manual mode: create exactly N sprints
     $sprintWindows = @()
-    $startDateIteration = $StartDate.Date
+    $startDateIteration = $StartDateDt.Date
 
     for ($i=1; $i -le $NumberOfSprints; $i++) {
         $finishDateIteration = $startDateIteration.AddDays($SprintLengthDays - 1)
@@ -174,12 +191,12 @@ if ($NumberOfSprints -gt 0) {
 else {
     # Auto mode: create until end of year
     $sprintWindows = Get-SprintWindowsToEndOfYear `
-        -StartDate $StartDate `
+        -StartDate $StartDateDt `
         -SprintLengthDays $SprintLengthDays `
         -GapDays $GapDays `
         -EndDate $yearEnd
 
-    Write-Host "Auto-calculated sprint count: $($sprintWindows.Count) (from $($StartDate.Date) to $yearEnd)"
+    Write-Host "Auto-calculated sprint count: $($sprintWindows.Count) (from $($StartDateDt.Date) to $yearEnd)"
 }
 
 foreach ($w in $sprintWindows) {
