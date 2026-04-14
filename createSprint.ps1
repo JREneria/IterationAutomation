@@ -93,6 +93,7 @@ function Get-SprintWindowsToEndOfYear {
     $windows = @()
     $start = $StartDate.Date
     $end = $EndDate.Date
+    $sprintNumber = 1
 
     while ($start -le $end) {
         $finish = $start.AddDays($SprintLengthDays - 1)
@@ -101,12 +102,14 @@ function Get-SprintWindowsToEndOfYear {
         if ($finish -gt $end) { $finish = $end }
 
         $windows += [pscustomobject]@{
+            WeekNumber = $sprintNumber
             Start  = $start
             Finish = $finish
         }
 
         # Next sprint start = finish + gap + 1
         $start = $finish.AddDays($GapDays + 1)
+        $sprintNumber++
     }
     return $windows
 }
@@ -231,13 +234,11 @@ else {
 }
 
 foreach ($w in $sprintWindows) {
-
+    
     $startDateIteration = $w.Start
     $finishDateIteration = $w.Finish
 
-    $weekNumber = [System.Globalization.ISOWeek]::GetWeekOfYear($startDateIteration)
-
-    $sprintName = "Week $weekNumber - " +
+    $sprintName = "Week $w.WeekNumber - " +
         $startDateIteration.ToString("MM.dd.yyyy") + " - " +
         $finishDateIteration.ToString("MM.dd.yyyy")
 
