@@ -238,7 +238,7 @@ foreach ($w in $sprintWindows) {
     $startDateIteration = $w.Start
     $finishDateIteration = $w.Finish
 
-    $sprintName = "Week $w.WeekNumber - " +
+    $sprintName = "Week $($w.WeekNumber) - " +
         $startDateIteration.ToString("MM.dd.yyyy") + " - " +
         $finishDateIteration.ToString("MM.dd.yyyy")
 
