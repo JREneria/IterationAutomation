@@ -41,7 +41,7 @@ $headers = @{
 
 function Get-FirstMondayOfYear {
   param([int]$Year)
-
+  
   $jan1 = Get-Date -Year $Year -Month 1 -Day 1
   $offset = ([int][DayOfWeek]::Monday - [int]$jan1.DayOfWeek + 7) % 7
   return $jan1.AddDays($offset).Date
@@ -121,6 +121,11 @@ if ([string]::IsNullOrWhiteSpace($StartDate)) {
 }
 
 # Convert to DateTime for the rest of your script
+ if ($StartDate -eq "auto") {
+   $StartDate = (Get-FirstMondayOfYear -Year $YearOfIteration).ToString("yyyy-MM-dd")
+   Write-Host "StartDate=auto → using first Monday: $StartDate"
+ }
+ 
 $StartDateDt = [datetime]$StartDate
 
 if (-not $yearNode) {
