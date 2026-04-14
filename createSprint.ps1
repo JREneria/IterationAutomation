@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Project,       # e.g. Azure Boards Rollout 2
 
     [Parameter(Mandatory = $true)][int]$YearOfIteration,
-    [Parameter(Mandatory = $false)][datetime]$StartDate,
+    [Parameter(Mandatory = $false)][string]$StartDate,
     [Parameter(Mandatory = $true)][int]$NumberOfSprints,
 
     [Parameter(Mandatory = $false)][int]$SprintLengthDays = 5,
