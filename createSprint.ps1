@@ -55,13 +55,19 @@ function Get-LastFridayOfYearAllowNextYear {
     )
 
     $dec31 = Get-Date -Year $Year -Month 12 -Day 31
+    $fri   = [System.DayOfWeek]::Friday
 
-    # DayOfWeek: Sunday=0 ... Friday=5 ... Saturday=6
-    $target = [System.DayOfWeek]::Friday
-    $offset = ([int]$target - [int]$dec31.DayOfWeek + 7) % 7
+    if ($dec31.DayOfWeek -in @([DayOfWeek]::Monday,[DayOfWeek]::Tuesday,[DayOfWeek]::Wednesday,[DayOfWeek]::Thursday)) {
+        # forward to Friday
+        $fwd = (([int]$fri - [int]$dec31.DayOfWeek + 7) % 7)
+        return $dec31.AddDays($fwd).Date
+    }
+    else {
+        # backward to Friday
+        $back = (([int]$dec31.DayOfWeek - [int]$fri + 7) % 7)
+        return $dec31.AddDays(-$back).Date
+    }
 
-    # Friday on or after Dec 31
-    return $dec31.AddDays($offset).Date
 }
 
 function Get-SprintWindowsToEndOfYear {
