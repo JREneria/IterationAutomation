@@ -13,26 +13,31 @@ parameters:
 - name: yearOfIteration
   type: number
   default: 2027
+  displayName: "Year"
 
 # First sprint start date (ISO format recommended)
 - name: startDate
   type: string
   default: "auto"
+  displayName: "Start Date (Default is first Monday of the year)"
 
 # Number of sprints to create
 - name: numberOfSprints
   type: number
   default: 0
+  displayName: "# of Sprints to create (Default is week count until end of year)"
 
 # Sprint duration (business days)
 - name: sprintLengthDays
   type: number
   default: 5
+  displayName: "Sprint Days"
 
 # Gap between sprints (usually weekends)
 - name: gapDays
   type: number
   default: 2
+  displayName: "Sprint Gap Days"
 
 pool:
   vmImage: ubuntu-latest
