@@ -220,7 +220,6 @@ else {
         -StartDate $yearStart `
         -SprintLengthDays $SprintLengthDays `
         -GapDays $GapDays `
-        -EndDate $yearFinish
 
     Write-Host "Auto-calculated sprint count: $($sprintWindows.Count) (from $($yearStart.Date) to $yearFinish)"
 }
