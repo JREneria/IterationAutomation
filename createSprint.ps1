@@ -65,26 +65,34 @@ function Get-LastFridayOfYearAllowNextYear {
 }
 
 function Get-SprintWindowsToEndOfYear {
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)][datetime]$StartDate,
         [Parameter(Mandatory)][int]$SprintLengthDays,
         [Parameter(Mandatory)][int]$GapDays,
-        [Parameter(Mandatory)][datetime]$EndDate
+
+        # Use StartDate.Year by default, but allow override (ex: YearOfIteration)
+        [Parameter(Mandatory=$false)][int]$Year
     )
 
     if ($SprintLengthDays -lt 1) { throw "SprintLengthDays must be >= 1" }
     if ($GapDays -lt 0) { throw "GapDays must be >= 0" }
 
+    if (-not $Year -or $Year -eq 0) {
+        $Year = $StartDate.Year
+    }
+
+    $EndDate = Get-LastFridayOfYearAllowNextYear -Year $Year
+
     $windows = @()
     $start = $StartDate.Date
+    $end = $EndDate.Date
 
-    while ($start -le $EndDate.Date) {
+    while ($start -le $end) {
         $finish = $start.AddDays($SprintLengthDays - 1)
 
-        # Policy A: clamp finish date to EndDate
-        if ($finish -gt $EndDate.Date) {
-            $finish = $EndDate.Date
-        }
+        # Clamp finish date to end boundary (last Friday)
+        if ($finish -gt $end) { $finish = $end }
 
         $windows += [pscustomobject]@{
             Start  = $start
@@ -97,7 +105,6 @@ function Get-SprintWindowsToEndOfYear {
 
     return $windows
 }
-
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","DELETE")] [string]$Method,
