@@ -17,8 +17,8 @@ parameters:
   displayName: "Team name (required)"
 
 - name: yearOfIteration
-  type: number
-  default: 2027
+  type: string
+  default: "auto"
   displayName: "Year iteration (e.g., 2027)"
 
 - name: fromDate
