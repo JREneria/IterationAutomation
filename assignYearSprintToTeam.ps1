@@ -35,7 +35,7 @@ $base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
 
 $headers = @{
     Authorization = "Basic $base64"
-    Accept        = "application/json"
+    Accept        = "application/json;api-version=7.1"
     "Content-Type"= "application/json"
 }
 
