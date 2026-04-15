@@ -1,15 +1,15 @@
 trigger: none
 
 parameters:
-- name: organization
-  type: string
-  default: "$(System.TeamFoundationCollectionUri)"
-  displayName: "Organization URL (default: current org)"
+#- name: organization
+#  type: string
+#  default: "$(System.TeamFoundationCollectionUri)"
+#  displayName: "Organization URL (default: current org)"
 
-- name: project
-  type: string
-  default: "$(System.TeamProject)"
-  displayName: "Project (default: current project)"
+#- name: project
+#  type: string
+#  default: "$(System.TeamProject)"
+#  displayName: "Project (default: current project)"
 
 - name: teamName
   type: string
@@ -43,8 +43,8 @@ steps:
     pwsh: true
     filePath: scripts/assignSprintsUnderYear.ps1
     arguments: >
-      -Organization "${{ parameters.organization }}"
-      -Project "${{ parameters.project }}"
+      -Organization "$(System.TeamFoundationCollectionUri)"
+      -Project "$(System.TeamProject)"
       -TeamName "${{ parameters.teamName }}"
       -YearOfIteration ${{ parameters.yearOfIteration }}
       -FromDate "${{ parameters.fromDate }}"
