@@ -12,6 +12,7 @@ parameters:
   displayName: "Team (Default is auto, which is all teams)"
 
 - name: skipIfAlreadyAssigned
+  displayName: "Skip sprints that are already assigned"
   type: boolean
   default: true
 
