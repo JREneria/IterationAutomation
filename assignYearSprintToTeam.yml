@@ -41,7 +41,7 @@ steps:
   displayName: "Assign sprints under Year iteration to Team"
   inputs:
     pwsh: true
-    filePath: scripts/assignSprintsUnderYear.ps1
+    filePath: assignYearSprintToTeam.ps1
     arguments: >
       -Organization "$(System.TeamFoundationCollectionUri)"
       -Project "$(System.TeamProject)"
