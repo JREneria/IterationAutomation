@@ -110,6 +110,8 @@ function Get-TeamList {
     if ($TeamNameOrEmpty -and $TeamNameOrEmpty.Trim().Length -gt 0) {
         return @($TeamNameOrEmpty.Trim())
     }
+    
+    else if ($TeamNameOrEmpty -eq "auto") {
 
     Write-Host "No TeamName provided. Resolving ALL teams in project..."
 
@@ -123,6 +125,7 @@ function Get-TeamList {
     if ($names.Count -eq 0) { throw "No teams found in project '$ProjectName'." }
 
     return $names
+    }
 }
 
 # Resolve year + implied FromDate
