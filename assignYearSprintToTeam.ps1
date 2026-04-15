@@ -39,7 +39,7 @@ $base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
 
 $headers = @{
     Authorization = "Basic $base64"
-    Accept        = "application/json"
+    Accept        = "application/json;api-version=7.1"
     "Content-Type"= "application/json"
 }
 
@@ -52,7 +52,7 @@ function Invoke-AdoRest {
 
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json -ContentType "application/json"
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json "
     } else {
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
     }
@@ -66,7 +66,7 @@ $yearName   = $YearOfIteration.ToString()
 # 1) Load iteration tree and find the year node
 # Classification Nodes (Iterations) supports $depth for children. [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
 # -----------------------------
-$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4&api-version=7.1"
+$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
 $tree = Invoke-AdoRest -Method GET -Uri $treeUri
 
 $yearNode = @($tree.children) | Where-Object { $_.name -eq $yearName } | Select-Object -First 1
