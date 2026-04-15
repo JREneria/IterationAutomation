@@ -71,6 +71,33 @@ function Get-YearName {
         return $currentYear.ToString()
     }
 
+function Get-TeamList {
+    param(
+        [string]$Org,
+        [string]$ProjectName,
+        [string]$TeamNameOrEmpty
+    )
+
+    if ($TeamNameOrEmpty -and $TeamNameOrEmpty.Trim().Length -gt 0) {
+        return @($TeamNameOrEmpty.Trim())
+    }
+
+    Write-Host "No TeamName provided. Resolving ALL teams in project..."
+
+    $projectId = Get-ProjectId -Org $Org -ProjectName $ProjectName
+    if (-not $projectId) { throw "Failed to resolve projectId for '$ProjectName'." }
+
+    # Teams are managed by Core Teams APIs under a project. [2](https://oshamrai.wordpress.com/2025/03/30/azure-devops-rest-api-python-8-manage-areas-and-iterations-in-team-projects/)[3](https://www.postman.com/azurearchitecture/azure-devops-rest-api/request/zdmw2vh/classification-nodes-get-root-nodes)
+    $teamsUri = "$Org/_apis/projects/$projectId/teams?api-version=7.1"
+    $teamsResp = Invoke-AdoRest -Method GET -Uri $teamsUri
+
+    $names = @($teamsResp.value | Select-Object -ExpandProperty name)
+    if ($names.Count -eq 0) { throw "No teams found in project '$ProjectName'." }
+
+    return $names
+}
+
+
 $projectEsc = [uri]::EscapeDataString($Project)
 $teamEsc    = [uri]::EscapeDataString($TeamName)
 $yearName = Get-YearName -YearOfIteration $YearOfIteratio
@@ -117,7 +144,7 @@ Write-Host "Sprints to assign (after FromDate): $($sprintsToAssign.Count)"
 # -----------------------------
 $alreadyAssigned = @()
 if ($SkipIfAlreadyAssigned) {
-    $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+    $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
     $listResp = Invoke-AdoRest -Method GET -Uri $listUri
     $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
     Write-Host "Already assigned to team '$TeamName': $($alreadyAssigned.Count)"
@@ -127,26 +154,31 @@ if ($SkipIfAlreadyAssigned) {
 # 3) Assign each sprint to the team
 # Iterations - Post Team Iteration: POST teamsettings/iterations with body { id: <guid> }. [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
 # -----------------------------
-$assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
 
-foreach ($s in $sprintsToAssign) {
-    $iterId = $s.identifier
-    $iterName = $s.name
+$teamList = Get-TeamList -Org $Organization -ProjectName $Project -TeamNameOrEmpty $TeamName
 
-    if ($SkipIfAlreadyAssigned -and ($alreadyAssigned -contains $iterId)) {
-        Write-Host "Skipping (already assigned): $iterName"
-        continue
-    }
+foreach ($team in $teamList) {
+    $teamEsc = [uri]::EscapeDataString($team)
+    $assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
 
-    if ($PSCmdlet.ShouldProcess($TeamName, "Assign sprint '$iterName'")) {
-        try {
-            Invoke-AdoRest -Method POST -Uri $assignUri -Body @{ id = $iterId } | Out-Null
-            Write-Host "Assigned: $iterName"
+    foreach ($s in $sprintsToAssign) {
+        $iterId = $s.identifier
+        $iterName = $s.name
+    
+        if ($SkipIfAlreadyAssigned -and ($alreadyAssigned -contains $iterId)) {
+            Write-Host "Skipping (already assigned): $iterName"
+            continue
         }
-        catch {
-            Write-Host "Warning: Failed to assign '$iterName' to '$TeamName'. Error: $($_.Exception.Message)"
+    
+        if ($PSCmdlet.ShouldProcess($TeamName, "Assign sprint '$iterName'")) {
+            try {
+                Invoke-AdoRest -Method POST -Uri $assignUri -Body @{ id = $iterId } | Out-Null
+                Write-Host "Assigned: $iterName"
+            }
+            catch {
+                Write-Host "Warning: Failed to assign '$iterName' to '$TeamName'. Error: $($_.Exception.Message)"
+            }
         }
     }
 }
-
 Write-Host "`nDone (assign sprints under year)."
