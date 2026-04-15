@@ -3,11 +3,13 @@ trigger: none   # Adhoc only (intentional – avoids accidental sprint creation)
 parameters:
 - name: organization
   type: string
-  default: "https://dev.azure.com/wtw-bda-outsourcing-health-coremarket"
+  default: "$(System.TeamFoundationCollectionUri)"
+  displayName: "Organization URL (default: current org)"
 
 - name: project
   type: string
-  default: "Azure Boards Rollout 2"
+  default: "$(System.TeamProject)"
+  displayName: "Project (default: current project)"
 
 # Comma-separated Azure DevOps team names
 - name: teams
