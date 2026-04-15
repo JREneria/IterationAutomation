@@ -58,14 +58,22 @@ function Invoke-AdoRest {
     }
 }
 
+function Get-YearName {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [int]$YearOfIteration = 0
+    )
+
+    if ($YearOfIteration -eq 0) {
+        $currentYear = (Get-Date).Year
+        Write-Host "YearOfIteration not provided (0). Using current year: $currentYear"
+        return $currentYear.ToString()
+    }
+
 $projectEsc = [uri]::EscapeDataString($Project)
 $teamEsc    = [uri]::EscapeDataString($TeamName)
-
-if ($YearOfIteration -eq 0) {
-    $yearName = (Get-Date).Year
-    Write-Host "YearOfIteration not provided (0). Using current year: $YearOfIteration"
-}
-
+$yearName = Get-YearName -YearOfIteration $YearOfIteratio
 
 # -----------------------------
 # 1) Load iteration tree and find the year node
