@@ -206,7 +206,7 @@ foreach ($team in $teamList) {
     }
 
     foreach ($s in $sprintsToAssign) {
-        $iterId   = $s.id
+        $iterId   = $s.identifier
         $iterName = $s.name
         Write-Host "$iterId $iterName"
         
