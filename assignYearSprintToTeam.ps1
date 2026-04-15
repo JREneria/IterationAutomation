@@ -70,6 +70,7 @@ function Get-YearName {
         Write-Host "YearOfIteration not provided (0). Using current year: $currentYear"
         return $currentYear.ToString()
     }
+}
 
 function Get-TeamList {
     param(
