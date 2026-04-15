@@ -99,7 +99,7 @@ function Get-ProjectId {
 
     Write-Host "[Get-ProjectId] Fetches the project id (GUID) for the given project name."
     $projectEsc = [uri]::EscapeDataString($ProjectName)
-    $uri = "$Org/_apis/projects/$projectEsc?api-version=7.1"
+    $uri = "$Org/_apis/projects/$projectEsc"
     $p = Invoke-AdoRest -Method GET -Uri $uri
     return $p.id
 }
@@ -143,7 +143,7 @@ $projectEsc = [uri]::EscapeDataString($Project)
 
 # 1) Load iteration tree and find the year node (Classification Nodes - Get w/ $depth) [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
 
-$projTestUri = "$Organization/_apis/projects/${projectEsc}?api-version=7.1"
+$projTestUri = "$Organization/_apis/projects/${projectEsc}"
 Write-Host "Auth test GET: $projTestUri"
 try {
     $proj = Invoke-AdoRest -Method GET -Uri $projTestUri
