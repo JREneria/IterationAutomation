@@ -1,41 +1,45 @@
 trigger: none
 
 parameters:
-#- name: organization
-#  type: string
-#  default: "$(System.TeamFoundationCollectionUri)"
-#  displayName: "Organization URL (default: current org)"
-
-#- name: project
-#  type: string
-#  default: "$(System.TeamProject)"
-#  displayName: "Project (default: current project)"
+- name: yearOfIteration
+  type: number
+  default: 0   # 0 = current year (your script behavior)
 
 - name: teamName
   type: string
-  default: "all"
-  displayName: "Team name (required)"
-
-- name: yearOfIteration
-  type: number
-  default: 0
-  displayName: "Year iteration (e.g., 2027)"
-
-- name: fromDate
-  type: string
-  default: "auto"
-  displayName: "FromDate (yyyy-MM-dd) or 'auto' = today"
+  default: ""  # blank = all teams (if your script supports it)
 
 - name: skipIfAlreadyAssigned
   type: boolean
   default: true
-  displayName: "Skip already assigned iterations"
 
 pool:
   vmImage: ubuntu-latest
-
+  
 steps:
 - checkout: self
+
+- task: PowerShell@2
+  displayName: "Guardrail: block past years"
+  inputs:
+    pwsh: true
+    targetType: inline
+    script: |
+      $yearParam = [int]"${{ parameters.yearOfIteration }}"
+      $currentYear = (Get-Date).Year
+
+      if ($yearParam -eq 0) {
+        Write-Host "YearOfIteration=0 => treated as current year ($currentYear)."
+        exit 0
+      }
+
+      if ($yearParam -lt $currentYear) {
+        Write-Error "Blocking run: YearOfIteration ($yearParam) is in the past. Current year is $currentYear."
+        exit 1
+      }
+
+      Write-Host "OK: YearOfIteration ($yearParam) is current/future."
+
 
 - task: PowerShell@2
   displayName: "Assign sprints under Year iteration to Team"
