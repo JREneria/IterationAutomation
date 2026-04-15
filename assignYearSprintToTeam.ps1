@@ -194,7 +194,8 @@ $teamList = Get-TeamList -Org $Organization -ProjectName $Project -TeamNameOrEmp
 foreach ($team in $teamList) {
 
     $teamEsc = [uri]::EscapeDataString($team)
-    $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
+    $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+
 
     # Optional: load assigned iterations for THIS team (idempotency) [4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
     $alreadyAssigned = @()
