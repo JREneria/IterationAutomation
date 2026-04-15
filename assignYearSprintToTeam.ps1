@@ -111,7 +111,7 @@ function Get-TeamList {
         return @($TeamNameOrEmpty.Trim())
     }
     
-    else if ($TeamNameOrEmpty -eq "auto") {
+    elseif ($TeamNameOrEmpty -eq "auto") {
 
     Write-Host "No TeamName provided. Resolving ALL teams in project..."
 
