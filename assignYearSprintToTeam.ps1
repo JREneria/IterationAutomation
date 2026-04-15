@@ -201,6 +201,11 @@ foreach ($team in $teamList) {
     $alreadyAssigned = @()
     if ($SkipIfAlreadyAssigned) {
         $listResp = Invoke-AdoRest -Method GET -Uri $listUri
+        
+        Write-Host "DEBUG: listResp type = $($listResp.GetType().FullName)"
+        Write-Host "DEBUG: listResp keys = $($listResp.PSObject.Properties.Name -join ', ')"
+        Write-Host "DEBUG: listResp raw = $($listResp | ConvertTo-Json -Depth 6)"
+
         $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
     }
