@@ -136,7 +136,7 @@ $fromUtc  = $resolved.FromDateUtc
 $projectEsc = [uri]::EscapeDataString($Project)
 
 # 1) Load iteration tree and find the year node (Classification Nodes - Get w/ $depth) [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
-$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4&api-version=7.1"
+$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
 $tree = Invoke-AdoRest -Method GET -Uri $treeUri
 
 $yearNode = @($tree.children) | Where-Object { $_.name -eq $yearName } | Select-Object -First 1
@@ -173,12 +173,12 @@ foreach ($team in $teamList) {
     $teamEsc = [uri]::EscapeDataString($team)
 
     # Work Iterations - Post Team Iteration: add iteration to the team [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
-    $assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+    $assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
 
     # Optional: load assigned iterations for THIS team (idempotency) [3](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
     $alreadyAssigned = @()
     if ($SkipIfAlreadyAssigned) {
-        $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+        $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
         $listResp = Invoke-AdoRest -Method GET -Uri $listUri
         $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.Count)"
