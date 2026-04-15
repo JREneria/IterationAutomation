@@ -199,17 +199,9 @@ foreach ($team in $teamList) {
     # Optional: load assigned iterations for THIS team (idempotency) [4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
     $alreadyAssigned = @()
     if ($SkipIfAlreadyAssigned) {
-        $listResp = Invoke-AdoRest -Method GET -Uri $listUri
-
-
-        Write-Host "DEBUG listUri: $listUri"
-        Write-Host "DEBUG listResp type: $($listResp.GetType().FullName)"
-        Write-Host "DEBUG listResp keys: $($listResp.PSObject.Properties.Name -join ', ')"
-        Write-Host "DEBUG listResp JSON: $($listResp | ConvertTo-Json -Depth 10)"
-
-        
+        $listResp = Invoke-AdoRest -Method GET -Uri $listUri        
         $alreadyAssigned = @($listResp.value | Select-Object -ExpandProperty id)
-        Write-Host "$($alreadyAssigned)"
+        
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
     }
 
