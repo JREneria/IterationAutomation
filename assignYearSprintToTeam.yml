@@ -13,7 +13,7 @@ parameters:
 
 - name: teamName
   type: string
-  default: ""
+  default: "all"
   displayName: "Team name (required)"
 
 - name: yearOfIteration
