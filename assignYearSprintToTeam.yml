@@ -4,10 +4,12 @@ parameters:
 - name: yearOfIteration
   type: number
   default: 0   # 0 = current year (your script behavior)
+  displayName: "Year (Default is current year)"
 
 - name: teamName
   type: string
   default: "auto"  # blank = all teams (if your script supports it)
+  displayName: "Team (Default is auto, which is all teams)"
 
 - name: skipIfAlreadyAssigned
   type: boolean
