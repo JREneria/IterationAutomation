@@ -1,0 +1,53 @@
+trigger: none
+
+parameters:
+- name: organization
+  type: string
+  default: "$(System.TeamFoundationCollectionUri)"
+  displayName: "Organization URL (default: current org)"
+
+- name: project
+  type: string
+  default: "$(System.TeamProject)"
+  displayName: "Project (default: current project)"
+
+- name: teamName
+  type: string
+  default: ""
+  displayName: "Team name (required)"
+
+- name: yearOfIteration
+  type: number
+  default: 2027
+  displayName: "Year iteration (e.g., 2027)"
+
+- name: fromDate
+  type: string
+  default: "auto"
+  displayName: "FromDate (yyyy-MM-dd) or 'auto' = today"
+
+- name: skipIfAlreadyAssigned
+  type: boolean
+  default: true
+  displayName: "Skip already assigned iterations"
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- checkout: self
+
+- task: PowerShell@2
+  displayName: "Assign sprints under Year iteration to Team"
+  inputs:
+    pwsh: true
+    filePath: scripts/assignSprintsUnderYear.ps1
+    arguments: >
+      -Organization "${{ parameters.organization }}"
+      -Project "${{ parameters.project }}"
+      -TeamName "${{ parameters.teamName }}"
+      -YearOfIteration ${{ parameters.yearOfIteration }}
+      -FromDate "${{ parameters.fromDate }}"
+      -SkipIfAlreadyAssigned:$${{ parameters.skipIfAlreadyAssigned }}
+  env:
+    AZURE_DEVOPS_EXT_PAT: $(ADO_PAT)
