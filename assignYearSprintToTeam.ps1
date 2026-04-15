@@ -45,10 +45,6 @@ function Invoke-AdoRest {
         [Parameter(Mandatory)][string]$Uri,
         [Parameter()] $Body
     )
-
-    Write-Host "[Invoke-AdoRest] Calls Azure DevOps REST API using PAT auth (logs method + uri)."
-    Write-Host ("[Invoke-AdoRest] {0} {1}" -f $Method, $Uri)
-
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json -ContentType "application/json"
