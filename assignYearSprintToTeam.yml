@@ -53,4 +53,4 @@ steps:
       -YearOfIteration ${{ parameters.yearOfIteration }}
       -SkipIfAlreadyAssigned:$${{ parameters.skipIfAlreadyAssigned }}
   env:
-    AZURE_DEVOPS_EXT_PAT: $(ADO_PAT)
+    AZURE_DEVOPS_EXT_PAT: $(AZURE_DEVOPS_EXT_PAT)
