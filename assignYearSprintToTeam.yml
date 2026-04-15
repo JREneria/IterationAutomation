@@ -51,7 +51,6 @@ steps:
       -Project "$(System.TeamProject)"
       -TeamName "${{ parameters.teamName }}"
       -YearOfIteration ${{ parameters.yearOfIteration }}
-      -FromDate "${{ parameters.fromDate }}"
       -SkipIfAlreadyAssigned:$${{ parameters.skipIfAlreadyAssigned }}
   env:
     AZURE_DEVOPS_EXT_PAT: $(ADO_PAT)
