@@ -142,7 +142,13 @@ $fromUtc  = $resolved.FromDateUtc
 $projectEsc = [uri]::EscapeDataString($Project)
 
 # 1) Load iteration tree and find the year node (Classification Nodes - Get w/ $depth) [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
-$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?$depth=4"
+
+$projTestUri = "$Organization/_apis/projects/$projectEsc?api-version=7.1"
+Write-Host "Auth test GET: $projTestUri"
+$proj = Invoke-AdoRest -Method GET -Uri $projTestUri
+Write-Host "Auth OK. ProjectId=$($proj.id)"
+
+$treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
 $tree = Invoke-AdoRest -Method GET -Uri $treeUri
 
 $yearNode = @($tree.children) | Where-Object { $_.name -eq $yearName } | Select-Object -First 1
