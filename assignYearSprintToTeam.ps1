@@ -145,8 +145,23 @@ $projectEsc = [uri]::EscapeDataString($Project)
 
 $projTestUri = "$Organization/_apis/projects/${projectEsc}?api-version=7.1"
 Write-Host "Auth test GET: $projTestUri"
-$proj = Invoke-AdoRest -Method GET -Uri $projTestUri
-Write-Host "Auth OK. ProjectId=$($proj.id)"
+try {
+    $proj = Invoke-AdoRest -Method GET -Uri $projTestUri
+    Write-Host "Auth OK. ProjectId=$($proj.id) Name=$($proj.name)"
+}
+catch {
+    Write-Host "Auth test failed: $($_.Exception.Message)"
+
+    if ($_.Exception.Response -and $_.Exception.Response.GetResponseStream()) {
+        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+        $body = $reader.ReadToEnd()
+        Write-Host "---- Response body (first 800 chars) ----"
+        Write-Host ($body.Substring(0, [Math]::Min(800, $body.Length)))
+        Write-Host "----------------------------------------"
+    }
+    throw
+}
+
 
 $treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
 $tree = Invoke-AdoRest -Method GET -Uri $treeUri
