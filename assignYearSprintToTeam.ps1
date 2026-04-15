@@ -208,7 +208,7 @@ foreach ($team in $teamList) {
         Write-Host "DEBUG listResp JSON: $($listResp | ConvertTo-Json -Depth 10)"
 
         
-        $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
+        $alreadyAssigned = @($listResp.value | Select-Object -ExpandProperty id)
         Write-Host "$($alreadyAssigned)"
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
     }
