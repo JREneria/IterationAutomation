@@ -40,21 +40,25 @@ $headers = @{
 }
 
 function Invoke-AdoRest {
+    Write-Host "[Invoke-AdoRest] Calls Azure DevOps REST API using PAT auth (logs method + uri)."
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
         [Parameter(Mandatory)][string]$Uri,
         [Parameter()] $Body
     )
 
+    Write-Host ("[Invoke-AdoRest] {0} {1}" -f $Method, $Uri)
+
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json -ContentType "application/json"
     } else {
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
     }
 }
 
 function Resolve-YearAndFromDate {
+    Write-Host "[Resolve-YearAndFromDate] Resolves target year and implied FromDate (today if current year; Jan 1 if future year)."
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
@@ -74,12 +78,11 @@ function Resolve-YearAndFromDate {
         Write-Host "YearOfIteration = future year ($year). Using FromDate = start of year: $fromDate"
     }
     else {
-        # Choose your policy for past years:
-        # Option A: allow past assignment from Jan 1 of that year
+        # Policy A: allow past assignment from Jan 1 of that year
         $fromDate = (Get-Date -Year $year -Month 1 -Day 1).Date
         Write-Host "YearOfIteration = past year ($year). Using FromDate = start of year: $fromDate"
 
-        # Option B (safer): block past years
+        # Policy B (safer): block past years
         # throw "YearOfIteration ($year) is in the past. Refusing to assign historical sprints."
     }
 
@@ -92,6 +95,7 @@ function Resolve-YearAndFromDate {
 }
 
 function Get-ProjectId {
+    Write-Host "[Get-ProjectId] Fetches the project id (GUID) for the given project name."
     param([string]$Org, [string]$ProjectName)
 
     $projectEsc = [uri]::EscapeDataString($ProjectName)
@@ -101,19 +105,21 @@ function Get-ProjectId {
 }
 
 function Get-TeamList {
+    Write-Host "[Get-TeamList] Resolves team list: single team if provided; otherwise returns ALL teams in the project."
     param(
         [string]$Org,
         [string]$ProjectName,
         [string]$TeamNameOrEmpty
     )
 
-    if ($TeamNameOrEmpty -and $TeamNameOrEmpty.Trim().Length -gt 0) {
+    # ✅ If team explicitly provided and not 'auto' => use it
+    if ($TeamNameOrEmpty -and $TeamNameOrEmpty.Trim().Length -gt 0 -and $TeamNameOrEmpty.Trim().ToLower() -ne "auto") {
+        Write-Host "[Get-TeamList] Using explicit TeamName: $TeamNameOrEmpty"
         return @($TeamNameOrEmpty.Trim())
     }
-    
-    elseif ($TeamNameOrEmpty -eq "auto") {
 
-    Write-Host "No TeamName provided. Resolving ALL teams in project..."
+    # ✅ If empty OR 'auto' => resolve all teams
+    Write-Host "[Get-TeamList] No TeamName provided (or TeamName='auto'). Resolving ALL teams in project..."
 
     $projectId = Get-ProjectId -Org $Org -ProjectName $ProjectName
     if (-not $projectId) { throw "Failed to resolve projectId for '$ProjectName'." }
@@ -124,8 +130,8 @@ function Get-TeamList {
     $names = @($teamsResp.value | Select-Object -ExpandProperty name)
     if ($names.Count -eq 0) { throw "No teams found in project '$ProjectName'." }
 
+    Write-Host ("[Get-TeamList] Resolved {0} teams." -f $names.Count)
     return $names
-    }
 }
 
 # Resolve year + implied FromDate
@@ -135,7 +141,7 @@ $fromUtc  = $resolved.FromDateUtc
 
 $projectEsc = [uri]::EscapeDataString($Project)
 
-# 1) Load iteration tree and find the year node (Classification Nodes - Get w/ $depth) [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
+# 1) Load iteration tree and find the year node (Classification Nodes - Get w/ $depth) [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
 $treeUri = "$Organization/$projectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
 $tree = Invoke-AdoRest -Method GET -Uri $treeUri
 
@@ -144,7 +150,7 @@ if (-not $yearNode) {
     throw "Year iteration '$yearName' not found under Project Iterations. Ensure the year node exists first."
 }
 
-# Child nodes under the year are sprints and include 'identifier'. [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
+# Child nodes under the year are sprints and include 'identifier'. [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
 $sprints = @($yearNode.children)
 if ($sprints.Count -eq 0) {
     Write-Host "No sprints found under year '$yearName'. Nothing to assign."
@@ -172,10 +178,10 @@ foreach ($team in $teamList) {
 
     $teamEsc = [uri]::EscapeDataString($team)
 
-    # Work Iterations - Post Team Iteration: add iteration to the team [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
+    # Work Iterations - Post Team Iteration endpoint (assign iteration to team) [3](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
     $assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
 
-    # Optional: load assigned iterations for THIS team (idempotency) [3](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
+    # Optional: load assigned iterations for THIS team (idempotency) [4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
     $alreadyAssigned = @()
     if ($SkipIfAlreadyAssigned) {
         $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
