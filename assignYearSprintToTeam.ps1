@@ -207,7 +207,7 @@ foreach ($team in $teamList) {
     foreach ($s in $sprintsToAssign) {
         $iterId   = $s.identifier
         $iterName = $s.name
-        Write-Host "$iterId: $iterName"
+        Write-Host "$iterId $iterName"
         
         if ($SkipIfAlreadyAssigned -and ($alreadyAssigned -contains $iterId)) {
             Write-Host "Skipping (already assigned) [$team]: $iterName"
