@@ -40,13 +40,13 @@ $headers = @{
 }
 
 function Invoke-AdoRest {
-    Write-Host "[Invoke-AdoRest] Calls Azure DevOps REST API using PAT auth (logs method + uri)."
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
         [Parameter(Mandatory)][string]$Uri,
         [Parameter()] $Body
     )
 
+    Write-Host "[Invoke-AdoRest] Calls Azure DevOps REST API using PAT auth (logs method + uri)."
     Write-Host ("[Invoke-AdoRest] {0} {1}" -f $Method, $Uri)
 
     if ($null -ne $Body) {
@@ -58,12 +58,12 @@ function Invoke-AdoRest {
 }
 
 function Resolve-YearAndFromDate {
-    Write-Host "[Resolve-YearAndFromDate] Resolves target year and implied FromDate (today if current year; Jan 1 if future year)."
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
         [int]$YearOfIteration = 0
     )
+    Write-Host "[Resolve-YearAndFromDate] Resolves target year and implied FromDate (today if current year; Jan 1 if future year)."
 
     $now = Get-Date
     $currentYear = $now.Year
@@ -95,9 +95,9 @@ function Resolve-YearAndFromDate {
 }
 
 function Get-ProjectId {
-    Write-Host "[Get-ProjectId] Fetches the project id (GUID) for the given project name."
     param([string]$Org, [string]$ProjectName)
 
+    Write-Host "[Get-ProjectId] Fetches the project id (GUID) for the given project name."
     $projectEsc = [uri]::EscapeDataString($ProjectName)
     $uri = "$Org/_apis/projects/$projectEsc?api-version=7.1"
     $p = Invoke-AdoRest -Method GET -Uri $uri
@@ -105,13 +105,13 @@ function Get-ProjectId {
 }
 
 function Get-TeamList {
-    Write-Host "[Get-TeamList] Resolves team list: single team if provided; otherwise returns ALL teams in the project."
     param(
         [string]$Org,
         [string]$ProjectName,
         [string]$TeamNameOrEmpty
     )
 
+    Write-Host "[Get-TeamList] Resolves team list: single team if provided; otherwise returns ALL teams in the project."
     # ✅ If team explicitly provided and not 'auto' => use it
     if ($TeamNameOrEmpty -and $TeamNameOrEmpty.Trim().Length -gt 0 -and $TeamNameOrEmpty.Trim().ToLower() -ne "auto") {
         Write-Host "[Get-TeamList] Using explicit TeamName: $TeamNameOrEmpty"
