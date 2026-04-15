@@ -202,13 +202,13 @@ foreach ($team in $teamList) {
     if ($SkipIfAlreadyAssigned) {
         $listResp = Invoke-AdoRest -Method GET -Uri $listUri
         $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty identifier)
+        Write-Host "$($alreadyAssigned)"
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
     }
 
     foreach ($s in $sprintsToAssign) {
         $iterId   = $s.identifier
         $iterName = $s.name
-        Write-Host "$iterId $iterName"
         
         if ($SkipIfAlreadyAssigned -and ($alreadyAssigned -contains $iterId)) {
             Write-Host "Skipping (already assigned) [$team]: $iterName"
