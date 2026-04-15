@@ -204,7 +204,7 @@ foreach ($team in $teamList) {
         $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
         $listResp = Invoke-AdoRest -Method GET -Uri $listUri
         $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
-        Write-Host "Already assigned to team '$team': $($alreadyAssigned.Count)"
+        Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
     }
 
     foreach ($s in $sprintsToAssign) {
