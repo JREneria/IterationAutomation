@@ -164,7 +164,15 @@ $tree = Invoke-AdoRest -Method GET -Uri $treeUri
 
 $yearNode = @($tree.children) | Where-Object { $_.name -eq $yearName } | Select-Object -First 1
 if (-not $yearNode) {
-    throw "Year iteration '$yearName' not found under Project Iterations. Ensure the year node exists first."
+    $available = @($tree.children | Select-Object -ExpandProperty name)
+
+    Write-Warning "Year iteration '$yearName' was not found in project '$Project'. No sprints were assigned."
+    if ($available.Count -gt 0) {
+        Write-Host "Available top-level iterations: $($available -join ', ')"
+    }
+    Write-Host "Tip: Create the year iteration first (Project Settings > Boards > Project configuration / Iterations), then re-run."
+
+    return   # <-- exits script successfully (no failure)
 }
 
 # Child nodes under the year are sprints and include 'identifier'. [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
