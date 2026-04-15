@@ -52,7 +52,7 @@ function Invoke-AdoRest {
 
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json "
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json
     } else {
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
     }
