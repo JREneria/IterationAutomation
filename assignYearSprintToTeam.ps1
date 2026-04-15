@@ -194,14 +194,11 @@ $teamList = Get-TeamList -Org $Organization -ProjectName $Project -TeamNameOrEmp
 foreach ($team in $teamList) {
 
     $teamEsc = [uri]::EscapeDataString($team)
-
-    # Work Iterations - Post Team Iteration endpoint (assign iteration to team) [3](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
-    $assignUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
+    $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
 
     # Optional: load assigned iterations for THIS team (idempotency) [4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)
     $alreadyAssigned = @()
     if ($SkipIfAlreadyAssigned) {
-        $listUri = "$Organization/$projectEsc/$teamEsc/_apis/work/teamsettings/iterations"
         $listResp = Invoke-AdoRest -Method GET -Uri $listUri
         $alreadyAssigned = @($listResp.values | Select-Object -ExpandProperty id)
         Write-Host "Already assigned to team '$team': $($alreadyAssigned.count)"
@@ -210,7 +207,8 @@ foreach ($team in $teamList) {
     foreach ($s in $sprintsToAssign) {
         $iterId   = $s.identifier
         $iterName = $s.name
-
+        Write-Host "$iterId: $iterName"
+        
         if ($SkipIfAlreadyAssigned -and ($alreadyAssigned -contains $iterId)) {
             Write-Host "Skipping (already assigned) [$team]: $iterName"
             continue
@@ -218,7 +216,7 @@ foreach ($team in $teamList) {
 
         if ($PSCmdlet.ShouldProcess($team, "Assign sprint '$iterName'")) {
             try {
-                Invoke-AdoRest -Method POST -Uri $assignUri -Body @{ id = $iterId } | Out-Null
+                Invoke-AdoRest -Method POST -Uri $listUri -Body @{ id = $iterId } | Out-Null
                 Write-Host "Assigned [$team]: $iterName"
             }
             catch {
