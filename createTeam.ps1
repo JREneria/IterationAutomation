@@ -138,6 +138,13 @@ if ($clients.Count -lt 1) { throw "At least 1 client is required." }
 Write-Host "Clients resolved ($($clients.Count)): $($clients -join ', ')"
 
 # ----------------------------
+# Parse roles list
+# ----------------------------
+$roles = @($RolesJson | ConvertFrom-Json) | ForEach-Object { "$_".Trim() } | Where-Object { $_ -ne "" } | Select-Object -Unique
+if ($roles.Count -lt 1) { throw "At least 1 role is required." }
+Write-Host "Roles resolved ($($roles.Count)): $($roles -join ', ')"
+
+# ----------------------------
 # Resolve org short name (for vssps.dev.azure.com Graph endpoints)
 # ----------------------------
 function Get-OrgNameFromUrl {
@@ -403,12 +410,18 @@ function Find-TeamGroupDescriptor {
     return $null
 }
 
-function Find-ClientDevGroupDescriptor {
-    param([object[]]$Groups, [string]$ClientName)
+function Find-ClientRoleGroupDescriptor {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [object[]] $Groups,
+        [Parameter(Mandatory)] [string] $ClientName,
+        [Parameter(Mandatory)] [string] $RoleName
+    )
 
-    $pn = "$ClientName Developers"
-    Write-Host "[Graph] Finding client dev group: '$pn'..."
-    $g = $Groups | Where-Object { $_.principalName -eq $pn } | Select-Object -First 1
+    $principal = "$ClientName $RoleName"
+    Write-Host "[Graph] Looking for group principalName: '$principal'"
+
+    $g = $Groups | Where-Object { $_.principalName -eq $principal } | Select-Object -First 1
     if ($g) { return $g.descriptor }
     return $null
 }
@@ -452,14 +465,21 @@ if (-not $SkipTeamMembershipGroups) {
             Write-Warning "Team membership group not found for '$TeamName'. Skipping membership updates."
         } else {
             foreach ($c in $clients) {
-                $clientDesc = Find-ClientDevGroupDescriptor -Groups $graphGroups -ClientName $c
-                if (-not $clientDesc) {
-                    Write-Warning "Client group '[TEAM FOUNDATION]\$c Developers' not found. Skipping."
-                    continue
-                }
-
-                Add-GraphMembershipIdempotent -OrgName $orgName -SubjectDescriptor $clientDesc -ContainerDescriptor $teamGroupDesc -DryRun $DryRun
-                Write-Host "✅ Ensured: [TEAM FOUNDATION]\$c Developers is in Team '$TeamName'"
+                foreach ($r in $roles) {
+                        $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
+                        if (-not $roleDesc) {
+                            Write-Warning "Group not found: '$c $r'. Skipping."
+                            continue
+                        }
+                
+                        Add-GraphMembershipIdempotent `
+                            -OrgName $orgName `
+                            -SubjectDescriptor $roleDesc `
+                            -ContainerDescriptor $teamGroupDesc `
+                            -DryRun $DryRun
+                
+                        Write-Host "Ensured: $c $r is in Team '$TeamName'"
+                    }
             }
         }
     } catch {
