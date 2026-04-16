@@ -244,4 +244,4 @@ steps:
       -SkipIterationAssignment:$${{ parameters.skipIterationAssignment }}
   env:
     # Use OAuth token (recommended) — requires "Allow scripts to access OAuth token"
-    AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
+    AZURE_DEVOPS_EXT_PAT: $(AZURE_DEVOPS_EXT_PAT)
