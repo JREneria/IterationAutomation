@@ -12,10 +12,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ClientsJson,    # JSON array e.g. ["ClientA","ClientB"]
 
-    # 0 = current year
-    [Parameter(Mandatory = $false)]
-    [int]$YearOfIteration = 0,
-
     # Safety switches
     [Parameter(Mandatory = $false)]
     [bool]$DryRun = $false,
@@ -70,7 +66,7 @@ if ($token -match '^eyJ') {
 
 $headers = @{
     Authorization = $authHeaderValue
-    Accept        = "application/json"
+    Accept        = "application/json;api-version=7.1"
     "Content-Type"= "application/json"
 }
 
@@ -119,7 +115,7 @@ function Invoke-AdoRest {
     )
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json -ContentType "application/json"
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json
     } else {
         return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
     }
@@ -197,7 +193,7 @@ function Ensure-Team {
 
     Write-Host "[Ensure-Team] Ensuring team exists: '$TeamName'..."
 
-    $listUri = "$Org/_apis/projects/$ProjectId/teams?api-version=7.1"
+    $listUri = "$Org/_apis/projects/$ProjectId/teams"
     $teams = Invoke-AdoRest -Method GET -Uri $listUri
     $existing = @($teams.value) | Where-Object { $_.name -eq $TeamName } | Select-Object -First 1
     if ($existing) {
@@ -210,7 +206,7 @@ function Ensure-Team {
         return $null
     }
 
-    $createUri = "$Org/_apis/projects/$ProjectId/teams?api-version=7.1"
+    $createUri = "$Org/_apis/projects/$ProjectId/teams"
     $body = @{ name = $TeamName }
 
     try {
@@ -251,7 +247,7 @@ function Ensure-AreaNode {
         $parentPath = "/" + ($encoded -join "/")
     }
 
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=7.1"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath"
     Write-Host "[Ensure-AreaNode] Ensuring area exists under '$($ParentSegments -join '\')' name='$Name'"
 
     if ($DryRun -or -not $PSCmdlet.ShouldProcess("$($ParentSegments -join '\')\\$Name", "Create/Update Area Node")) {
@@ -331,7 +327,7 @@ function Get-ProjectScopeDescriptor {
     param([string]$OrgName, [string]$ProjectId)
 
     Write-Host "[Graph] Resolving project scope descriptor..."
-    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/$ProjectId?api-version=7.1"
+    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/$ProjectId"
     $resp = Invoke-AdoRest -Method GET -Uri $uri
     return $resp.value
 }
@@ -467,14 +463,14 @@ function Get-IterationTree {
     param([string]$Org, [string]$ProjectEsc)
 
     # Classification Nodes - Get with $depth. [12](https://developercommunity.visualstudio.com/t/Graph-APIs-not-working-for-Azure-DevOps/10975063?viewtype=all&stateGroup=active&ftype=problem)
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4&api-version=7.1"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
     return Invoke-AdoRest -Method GET -Uri $uri
 }
 
 function Get-TeamIterationIds {
     param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc)
 
-    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations"
     $resp = Invoke-AdoRest -Method GET -Uri $uri
 
     # Some responses use 'values' (docs) and some use 'value' in practice; handle both safely. [11](https://oshamrai.wordpress.com/2025/03/30/azure-devops-rest-api-python-8-manage-areas-and-iterations-in-team-projects/)
@@ -489,7 +485,7 @@ function Add-TeamIteration {
     param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc, [string]$IterationId, [bool]$DryRun)
 
     # Post Team Iteration expects { id: <uuid> }. [10](https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)
-    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations?api-version=7.1"
+    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations"
     if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamEsc, "POST Team Iteration $IterationId")) {
         Write-Host "[Iterations] DryRun/WhatIf: would POST $uri with id=$IterationId"
         return
