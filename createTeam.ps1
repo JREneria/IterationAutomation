@@ -235,7 +235,7 @@ function Test-AreaExists {
     )
 
     $encodedPath = ($FullPathSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/"
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath?api-version=7.1"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath"
 
     try {
         Invoke-AdoRest -Method GET -Uri $uri | Out-Null
@@ -279,7 +279,7 @@ function Ensure-AreaNode {
         $parentPath = "/" + ($encoded -join "/")
     }
 
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=7.1"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath"
     Write-Host "[Ensure-AreaNode] Creating under parent '$($ParentSegments -join '\')' name='$Name'"
     Write-Host "[Ensure-AreaNode] POST $uri"
 
