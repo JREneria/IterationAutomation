@@ -418,10 +418,10 @@ function Find-ClientRoleGroupDescriptor {
         [Parameter(Mandatory)] [string] $RoleName
     )
 
-    $principal = "${ClientName}_${RoleName}"
+    $principal = "${ClientName} ${RoleName}"
     Write-Host "[Graph] Looking for group principalName: '$principal'"
 
-    $g = $Groups | Where-Object { $_.principalName -eq $principal } | Select-Object -First 1
+    $g = $Groups | Where-Object { $_.principalName -contains $principal } | Select-Object -First 1
     if ($g) { return $g.descriptor }
     return $null
 }
