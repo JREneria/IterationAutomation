@@ -246,7 +246,7 @@ function Ensure-AreaNode {
         $encoded = $ParentSegments | ForEach-Object { [uri]::EscapeDataString($_) }
         $parentPath = "/" + ($encoded -join "/")
     }
-
+    Write-Host $parentPath
     $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath"
     Write-Host "[Ensure-AreaNode] Ensuring area exists under '$($ParentSegments -join '\')' name='$Name'"
 
