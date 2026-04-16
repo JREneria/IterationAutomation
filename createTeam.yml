@@ -1,0 +1,254 @@
+trigger: none
+
+parameters:
+- name: project
+  type: string
+  default: "$(System.TeamProject)"
+  displayName: "ADO Project (default: current project)"
+
+- name: teamName
+  type: string
+  default: ""
+  displayName: "Team Name (required)"
+
+# Multi-select clients (2–4 typical)
+- name: clients
+  type: stringList
+  default: []
+  displayName: "Client List (multi-select)"
+  values:
+    - 3M
+  - 3MHealthCareBusinessGroup
+  - AbbVie
+  - AbbVieBC3
+  - AdvocateAurora
+  - AdvocateDRS
+  - Alorica
+  - Amazon
+  - Andersen
+  - Apple
+  - AppliedMaterials
+  - ArdentHealth
+  - Arrow
+  - ARTCo
+  - ARTCoDemo
+  - AutomatedTestingTool
+  - BakerHughes
+  - BallCorp
+  - Billing
+  - BlueShieldDRS
+  - Bosch
+  - BoschDRS
+  - BreadFinancial
+  - CACI
+  - Cargill
+  - CBRE
+  - Centene
+  - CEVA
+  - CevaDRS
+  - Charter
+  - Chevron
+  - CHRobinsonDRS
+  - CHW
+  - Citizens
+  - COBRA
+  - CocaColaSW
+  - Columbia
+  - Comcast
+  - ComcastBC3
+  - Comerica
+  - CommonSpirit
+  - CommonSpiritDRS
+  - Concentrix
+  - ConstellationSoftware
+  - ContinentalTireDRS
+  - Corning
+  - Costco
+  - DartmouthHealth
+  - DowChemical
+  - DRS.2.0
+  - drs_Altria
+  - drs_Nestle
+  - EHI
+  - EHICAN
+  - Emerson
+  - Ericsson
+  - Exchange
+  - Facebook
+  - Fairview
+  - Farmers
+  - FedEx
+  - FedExCorp
+  - FedExFreight
+  - FiatChrysler
+  - firstcitizens
+  - FMCNA
+  - Fortrea
+  - GenuinePartsCompany
+  - GitHubDRS
+  - GlobalFoundries
+  - GlobalPayments
+  - Group1Auto
+  - HealthfirstDRS
+  - HMSHost
+  - ICG
+  - IngramMicro
+  - IntercontinentalHotels
+  - Intuit
+  - IPG
+  - Izenda
+  - JonesLangLaSalle
+  - KPMG
+  - Kraft
+  - Kroger
+  - LabCorp
+  - LibertyMutual
+  - Marriott
+  - MarsInc
+  - MarsVetHealth
+  - MattressFirm
+  - MCCH
+  - MedStar
+  - MillerKnollDRS
+  - Nestle
+  - Nike
+  - NorfolkSouthern
+  - NorthernTrust
+  - NorthernTrustDRS
+  - NorthsideHospital
+  - NWMField
+  - OmniHotels
+  - OmniHotelsDRS
+  - Oracle
+  - PacificGasElectric
+  - PaloAltoNetworks
+  - PeaceHealth
+  - PeaceHealthDRS
+  - Pilot
+  - PitneyBowes
+  - PNC
+  - PNCDeID
+  - PPG
+  - Principal
+  - PrincipalDRS
+  - Providence
+  - PSEGCorp
+  - qurateretailgroup
+  - RHC
+  - RioTinto
+  - Rollins
+  - SaintGobain
+  - SallyBeauty
+  - SCAHealth
+  - Scripps
+  - Sempra
+  - Sentara
+  - SentaraDRS
+  - Sevita
+  - Smithfield
+  - SSCS
+  - SSMHealthDRS
+  - SutterHealth
+  - TAC
+  - TAC_BC3
+  - TCCC
+  - TD
+  - Tenet
+  - ToyotaDRS
+  - Trane
+  - UniFirst
+  - UniversalHealthServices
+  - UniversityHospitals
+  - Unum
+  - UPS
+  - USAA
+  - VCA
+  - Versant
+  - VitalCo
+  - WaupacaFoundry
+  - WellsFargo
+  - Whirlpool
+  - WhirlpoolDRS
+  - Wood
+  - WTW
+  - Zurich
+
+# 0 = current year (your script logic)
+- name: yearOfIteration
+  type: number
+  default: 0
+  displayName: "Year of Iteration (0 = current year)"
+
+# Safety / behavior flags
+- name: dryRun
+  type: boolean
+  default: false
+  displayName: "Dry Run (no changes)"
+
+- name: skipTeamFieldValues
+  type: boolean
+  default: false
+  displayName: "Skip Team Field Values (AreaPath config)"
+
+- name: skipTeamMembershipGroups
+  type: boolean
+  default: false
+  displayName: "Skip Team Membership Group updates (Graph)"
+
+- name: skipIterationAssignment
+  type: boolean
+  default: false
+  displayName: "Skip Iteration Assignment"
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- checkout: self
+
+# Guardrails to avoid accidental runs
+- task: PowerShell@2
+  displayName: "Validate parameters"
+  inputs:
+    pwsh: true
+    targetType: inline
+    script: |
+      $team = "${{ parameters.teamName }}".Trim()
+      if ([string]::IsNullOrWhiteSpace($team)) {
+        Write-Error "TeamName is required."
+        exit 1
+      }
+
+      # clients is a stringList; convertToJson yields JSON array string
+      $clientsJson = '${{ convertToJson(parameters.clients) }}'
+      $clients = @()
+      if ($clientsJson -and $clientsJson -ne "[]") {
+        $clients = $clientsJson | ConvertFrom-Json
+      }
+
+      if ($clients.Count -lt 1) {
+        Write-Error "At least one client must be selected."
+        exit 1
+      }
+
+      Write-Host "Validation OK. TeamName='$team'. Clients=$($clients -join ', ')"
+
+# Run the bootstrap script
+- task: PowerShell@2
+  displayName: "Bootstrap Team (create team + areas + membership + iterations)"
+  inputs:
+    pwsh: true
+    filePath: scripts/bootstrap-team.ps1
+    arguments: >
+      -Organization "$(System.TeamFoundationCollectionUri)"
+      -Project "${{ parameters.project }}"
+      -TeamName "${{ parameters.teamName }}"
+      -ClientsJson '${{ convertToJson(parameters.clients) }}'
+      -YearOfIteration ${{ parameters.yearOfIteration }}
+      -DryRun:$${{ parameters.dryRun }}
+      -SkipTeamFieldValues:$${{ parameters.skipTeamFieldValues }}
+      -SkipTeamMembershipGroups:$${{ parameters.skipTeamMembershipGroups }}
+      -SkipIterationAssignment:$${{ parameters.skipIterationAssignment }}
+  env:
+    # Use OAuth token (recommended) — requires "Allow scripts to access OAuth token"
+    AZURE_DEVOPS_EXT_PAT: $(System.AccessToken)
