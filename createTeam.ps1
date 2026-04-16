@@ -227,7 +227,25 @@ function Ensure-Team {
 
 $teamObj = Ensure-Team -Org $Organization -ProjectId $projectId -TeamName $TeamName -DryRun $DryRun
 # Even in DryRun, we can proceed with best-effort for other steps, but membership/iterations need a team path.
+function Test-AreaExists {
+    param(
+        [string]$Org,
+        [string]$ProjectEsc,
+        [string[]]$FullPathSegments   # e.g. @('TeamName') or @('TeamName','ClientA')
+    )
 
+    $encodedPath = ($FullPathSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath?api-version=7.1"
+
+    try {
+        Invoke-AdoRest -Method GET -Uri $uri | Out-Null
+        return $true
+    } catch {
+        $code = $_.Exception.Response.StatusCode.value__
+        if ($code -eq 404) { return $false }
+        throw
+    }
+}
 # ----------------------------
 # (c) Ensure Areas: Project\TeamName\Client (idempotent)
 # Classification Nodes - Create Or Update supports Areas and path nesting. [3](https://www.reddit.com/r/azuredevops/comments/ii7rn0/difference_between_azure_artifacts_and_pipeline/)[4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
@@ -236,29 +254,43 @@ function Ensure-AreaNode {
     param(
         [string]$Org,
         [string]$ProjectEsc,
-        [string[]]$ParentSegments,  # e.g. @() for root; @('TeamName') for under team
+        [string[]]$ParentSegments,   # @() for root; @('TeamName') for under team
         [string]$Name,
         [bool]$DryRun
     )
 
+    # Build full path (from Areas root)
+    $fullPath = @()
+    if ($ParentSegments) { $fullPath += $ParentSegments }
+    $fullPath += $Name
+
+    Write-Host "[Ensure-AreaNode] Target AreaPath: $($fullPath -join '\')"
+
+    #  Idempotency: if it already exists, do nothing
+    if (Test-AreaExists -Org $Org -ProjectEsc $ProjectEsc -FullPathSegments $fullPath) {
+        Write-Host "[Ensure-AreaNode] Exists already. Skipping."
+        return $null
+    }
+
+    # Build parent path for CREATE call
     $parentPath = ""
     if ($ParentSegments -and $ParentSegments.Count -gt 0) {
         $encoded = $ParentSegments | ForEach-Object { [uri]::EscapeDataString($_) }
         $parentPath = "/" + ($encoded -join "/")
     }
-    Write-Host $parentPath
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath"
-    Write-Host "[Ensure-AreaNode] Ensuring area exists under '$($ParentSegments -join '\')' name='$Name'"
 
-    if ($DryRun -or -not $PSCmdlet.ShouldProcess("$($ParentSegments -join '\')\\$Name", "Create/Update Area Node")) {
-        Write-Host "[Ensure-AreaNode] DryRun/WhatIf: would POST $uri (skipping)"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=7.1"
+    Write-Host "[Ensure-AreaNode] Creating under parent '$($ParentSegments -join '\')' name='$Name'"
+    Write-Host "[Ensure-AreaNode] POST $uri"
+
+    if ($DryRun -or -not $PSCmdlet.ShouldProcess("$($fullPath -join '\')", "Create Area Node")) {
+        Write-Host "[Ensure-AreaNode] DryRun/WhatIf: skipping create."
         return $null
     }
 
     $body = @{ name = $Name }
     return Invoke-AdoRest -Method POST -Uri $uri -Body $body
 }
-
 # Ensure team root area node under project Areas root
 $null = Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @() -Name $TeamName -DryRun $DryRun
 
