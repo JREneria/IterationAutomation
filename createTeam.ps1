@@ -403,7 +403,7 @@ function Find-TeamGroupDescriptor {
 function Find-ClientDevGroupDescriptor {
     param([object[]]$Groups, [string]$ClientName)
 
-    $pn = "[TEAM FOUNDATION]\$ClientName Developers"
+    $pn = "$ClientName Developers"
     Write-Host "[Graph] Finding client dev group: '$pn'..."
     $g = $Groups | Where-Object { $_.principalName -eq $pn } | Select-Object -First 1
     if ($g) { return $g.descriptor }
