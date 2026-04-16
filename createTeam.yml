@@ -173,12 +173,6 @@ parameters:
   - WTW
   - Zurich
 
-# 0 = current year (your script logic)
-- name: yearOfIteration
-  type: number
-  default: 0
-  displayName: "Year of Iteration (0 = current year)"
-
 # Safety / behavior flags
 - name: dryRun
   type: boolean
@@ -241,10 +235,9 @@ steps:
     filePath: scripts/bootstrap-team.ps1
     arguments: >
       -Organization "$(System.TeamFoundationCollectionUri)"
-      -Project "${{ parameters.project }}"
+      -Project "$(System.TeamProject)"
       -TeamName "${{ parameters.teamName }}"
       -ClientsJson '${{ convertToJson(parameters.clients) }}'
-      -YearOfIteration ${{ parameters.yearOfIteration }}
       -DryRun:$${{ parameters.dryRun }}
       -SkipTeamFieldValues:$${{ parameters.skipTeamFieldValues }}
       -SkipTeamMembershipGroups:$${{ parameters.skipTeamMembershipGroups }}
