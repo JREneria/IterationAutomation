@@ -13,7 +13,7 @@ param(
     [string]$ClientsJson,    # JSON array e.g. ["ClientA","ClientB"]
     
     [Parameter(Mandatory = $false)]
-    [string]$RolesJson = '["Developers","Business Analysts", "Benefits System Administrators", "Project Managers"]'
+    [string]$RolesJson = '["Developers","Business Analysts", "Benefits System Administrators", "Project Managers"]',
 
     # Safety switches
     [Parameter(Mandatory = $false)]
