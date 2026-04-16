@@ -1,11 +1,6 @@
 trigger: none
 
 parameters:
-- name: project
-  type: string
-  default: "$(System.TeamProject)"
-  displayName: "ADO Project (default: current project)"
-
 - name: teamName
   type: string
   default: ""
