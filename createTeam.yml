@@ -227,7 +227,7 @@ steps:
   displayName: "Bootstrap Team (create team + areas + membership + iterations)"
   inputs:
     pwsh: true
-    filePath: createTea,.ps1
+    filePath: createTeam.ps1
     arguments: >
       -Organization "$(System.TeamFoundationCollectionUri)"
       -Project "$(System.TeamProject)"
