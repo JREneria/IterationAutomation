@@ -394,6 +394,13 @@ function Get-GraphGroupsInScope {
     } while ($continuation)
 
     Write-Host "[Graph] Total groups retrieved: $($all.Count)"
+    
+    $all |
+      Sort-Object displayName |
+      ForEach-Object {
+        Write-Host ("- displayName: {0} | principalName: {1}" -f $_.displayName, $_.principalName)
+      }
+
     return $all
 }
 
