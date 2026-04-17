@@ -253,8 +253,11 @@ function Find-AadGroupObjectIdByDisplayName {
         # URL-encode each value
         "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value)
     }) -join '&'
-    Write-Host $ub
-    $resp = Invoke-MsGraph -Method GET -Uri $ub 
+    
+    $uri = $ub.Uri.AbsoluteUri
+    Write-Host "[MS Graph] GET $uri"
+    $resp = Invoke-MsGraph -Method GET -Uri $uri
+
     if (-not $resp.value -or $resp.value.Count -eq 0) { return $null }
     return $resp.value[0].id
 }
