@@ -240,3 +240,7 @@ steps:
   env:
     # Use OAuth token (recommended) — requires "Allow scripts to access OAuth token"
     AZURE_DEVOPS_EXT_PAT: $(AZURE_DEVOPS_EXT_PAT)
+    AD_TENANT_ID: $(AAD_TENANT_ID)
+    AAD_CLIENT_ID: $(AAD_CLIENT_ID)
+    AAD_CLIENT_SECRET: $(AAD_CLIENT_SECRET)
+
