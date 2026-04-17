@@ -86,9 +86,16 @@ $GraphHeaders = @{
     Authorization = "Bearer $GraphAccessToken"
     Accept        = "application/json"
 }
+# --- PAT / Auth ---
+if (-not $env:AZURE_DEVOPS_EXT_PAT) {
+    throw "Missing AZURE_DEVOPS_EXT_PAT. Set it as a secret pipeline variable and pass via env."
+}
+
+$pat = $env:AZURE_DEVOPS_EXT_PAT
+$base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
 
 $AdoHeaders = @{
-    Authorization = "Bearer $AdoAccessToken"
+    Authorization = "Basic $base64"
     Accept        = "application/json"
     "Content-Type"= "application/json"
 }
