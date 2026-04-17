@@ -202,7 +202,20 @@ function Get-GraphGroupsInScope {
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
         $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  
-        Write-Host $uri
+
+        # --- Diagnostics (helps immediately when content isn't JSON) ---
+        $contentType = $resp.Headers.'Content-Type'
+        Write-Host "[Graph] Status=$($resp.StatusCode) Content-Type=$contentType"
+
+        if (-not $contentType -or $contentType -notmatch 'application/json') {
+            $preview = $resp.Content
+            if ($preview) {
+                $preview = $preview.Substring(0, [Math]::Min(400, $preview.Length))
+            }
+            throw "Expected JSON but got Content-Type='$contentType'. Body preview: $preview"
+        }
+        # --------------------------------------------------------------
+
         $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $headers
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
