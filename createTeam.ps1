@@ -202,21 +202,7 @@ function Get-GraphGroupsInScope {
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
         $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  
-        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $AdoHeaders
-        
-        # --- Diagnostics (helps immediately when content isn't JSON) ---
-        $contentType = $resp.Headers.'Content-Type'
-        Write-Host "[Graph] Status=$($resp.StatusCode) Content-Type=$contentType"
-
-        if (-not $contentType -or $contentType -notmatch 'application/json') {
-            $preview = $resp.Content
-            if ($preview) {
-                $preview = $preview.Substring(0, [Math]::Min(400, $preview.Length))
-            }
-            throw "Expected JSON but got Content-Type='$contentType'. Body preview: $preview"
-        }
-        # --------------------------------------------------------------
-
+        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $GraphHeaders
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
         $continuation = $resp.Headers.'X-MS-ContinuationToken'
@@ -246,6 +232,38 @@ function Find-ClientRoleGroupDescriptor {
     $g = $Groups | Where-Object { $_.principalName -eq $principal } | Select-Object -First 1
     if ($g) { return $g.descriptor }
     return $null
+}
+
+function Find-AadGroupObjectIdByDisplayName {
+    param(
+        [Parameter(Mandatory)][string]$DisplayName,
+        [Parameter(Mandatory)][string]$GraphAccessToken
+    )
+
+    $safe = $DisplayName.Replace("'", "''")
+    $uri = "https://graph.microsoft.com/v1.0/groups?`$filter=displayName eq '$safe'&`$select=id,displayName"
+    
+
+    $resp = Invoke-MsGraph -Method GET -Uri $uri 
+    if (-not $resp.value -or $resp.value.Count -eq 0) { return $null }
+    return $resp.value[0].id
+}
+
+function Materialize-AadGroupInAdoGraph {
+    param(
+        [Parameter(Mandatory)][string]$OrgName,
+        [Parameter(Mandatory)][string]$AadObjectId,
+        [Parameter(Mandatory)][string]$DisplayName
+    )
+
+    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?api-version=7.1-preview.1"
+    $body = @{
+        "@odata.type" = "#Microsoft.VisualStudio.Services.Graph.GraphGroupOriginIdCreationContext"
+        originId      = $AadObjectId
+        displayName   = $DisplayName
+    }
+
+    return Invoke-AdoRest -Method POST -Uri $uri -Body $body
 }
 
 function Add-GraphMembershipIdempotent {
@@ -406,17 +424,29 @@ if (-not $SkipTeamMembershipGroups) {
         } else {
             foreach ($c in $clients) {
                 foreach ($r in $roles) {
-                    $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
-                    if (-not $roleDesc) {
-                        Write-Warning "Group not found in ADO Graph: '$c $r' (skipping)"
+                    
+                    $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
+                    $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName -GraphAccessToken $GraphAccessToken
+
+                    if (-not $oid) {
+                        Write-Warning "AAD group not found: '$aadName' (skipping)"
                         continue
                     }
-                    Add-GraphMembershipIdempotent -OrgName $orgName -SubjectDescriptor $roleDesc -ContainerDescriptor $teamGroupDesc -DryRun $DryRun
-                    Write-Host "Ensured: '$c $r' is in Team '$TeamName'"
+
+                    $mat = Materialize-AadGroupInAdoGraph -OrgName $orgName -AadObjectId $oid -DisplayName $aadName
+                    if (-not $mat -or -not $mat.descriptor) {
+                        Write-Warning "Failed to materialize '$aadName' into ADO Graph (skipping)"
+                        continue
+                    }
+
+                    Add-GraphMembership -OrgName $orgName -SubjectDescriptor $mat.descriptor -ContainerDescriptor $teamGroupDesc
+                    Write-Host "✅ Added '$aadName' to Team '$TeamName'"
+
                 }
             }
         }
-    } catch {
+    }
+    catch {
         Write-Warning "Team membership group config error: $($_.Exception.Message)"
     }
 }
