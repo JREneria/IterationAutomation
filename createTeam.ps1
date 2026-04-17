@@ -239,9 +239,20 @@ function Find-AadGroupObjectIdByDisplayName {
         [Parameter(Mandatory)][string]$DisplayName
     )
 
+    # Escape single quotes for OData:  '  ->  ''
     $safe = $DisplayName.Replace("'", "''")
-    $uri = "https://graph.microsoft.com/v1.0/groups?`$filter=displayName eq '$safe'&`$select=id,displayName"
-    
+
+    # Build query in a dictionary (no manual string escaping)
+    $query = [ordered]@{
+        '$filter' = "displayName eq '$safe'"
+        '$select' = 'id,displayName'
+    }
+
+    $ub = [System.UriBuilder]::new("https://graph.microsoft.com/v1.0/groups")
+    $ub.Query = ($query.GetEnumerator() | ForEach-Object {
+        # URL-encode each value
+        "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value)
+    }) -join '&'
 
     $resp = Invoke-MsGraph -Method GET -Uri $uri 
     if (-not $resp.value -or $resp.value.Count -eq 0) { return $null }
