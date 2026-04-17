@@ -202,7 +202,7 @@ function Get-GraphGroupsInScope {
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
         $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  
-        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $GraphHeaders
+        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $AdoHeaders
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
         $continuation = $resp.Headers.'X-MS-ContinuationToken'
@@ -450,7 +450,7 @@ if (-not $SkipTeamMembershipGroups) {
                     }
 
                     Add-GraphMembership -OrgName $orgName -SubjectDescriptor $mat.descriptor -ContainerDescriptor $teamGroupDesc
-                    Write-Host "✅ Added '$aadName' to Team '$TeamName'"
+                    Write-Host "Added '$aadName' to Team '$TeamName'"
 
                 }
             }
