@@ -155,7 +155,8 @@ function Get-ProjectIdByName {
 
     $skip = 0; $top = 100
     while ($true) {
-        $uri = "$Org/_apis/projects?`$top=$top&`$skip=$skip&api-version=$ApiVersionCore"  # include api-version .com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)[3](https://www.postman.com/azurearchitecture/azure-devops-rest-api/request/zdmw2vh/classification-nodes-get-root-nodes)
+        $uri = "$Org/_apis/projects?`$top=$top&`$skip=$skip&api-version=$ApiVersionCore"  
+        Write-Host $uri
         $resp = Invoke-AdoRest -Method GET -Uri $uri
         $match = @($resp.value) | Where-Object { $_.name -eq $ProjectName } | Select-Object -First 1
         if ($match) { return $match.id }
