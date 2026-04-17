@@ -29,36 +29,8 @@ param(
 )
 
 # =========================
-# CONFIG + INPUTS
+# FUNCTIONS
 # =========================
-$Organization = $Organization.TrimEnd('/')
-$ApiVersionCore = "7.1"
-$ApiVersionWit  = "7.1"
-$ApiVersionWork = "7.1"
-$ApiVersionGraphPreview = "7.1-preview.1"
-
-Write-Host "`n=== Bootstrap Team Script ==="
-Write-Host "Organization: $Organization"
-Write-Host "Project: $Project"
-Write-Host "TeamName: $TeamName"
-Write-Host "DryRun: $DryRun"
-Write-Host "SkipTeamFieldValues: $SkipTeamFieldValues"
-Write-Host "SkipTeamMembershipGroups: $SkipTeamMembershipGroups"
-Write-Host "SkipIterationAssignment: $SkipIterationAssignment"
-
-# =========================
-# AUTH / TOKENS (Service Principal)
-# =========================
-$TenantId     = $env:AAD_TENANT_ID
-$ClientId     = $env:AAD_CLIENT_ID
-$ClientSecret = $env:AAD_CLIENT_SECRET
-
-if ([string]::IsNullOrWhiteSpace($TenantId))     { throw "Missing AAD_TENANT_ID env var." }
-if ([string]::IsNullOrWhiteSpace($ClientId))     { throw "Missing AAD_CLIENT_ID env var." }
-if ([string]::IsNullOrWhiteSpace($ClientSecret)) { throw "Missing AAD_CLIENT_SECRET env var." }
-
-Write-Host "AAD vars OK: TenantId=$TenantId, ClientId=$ClientId, SecretLength=$($ClientSecret.Length)"
-
 function Get-OAuthToken {
     [CmdletBinding()]
     param(
@@ -79,30 +51,6 @@ function Get-OAuthToken {
     (Invoke-RestMethod -Method POST -Uri $tokenUri -ContentType "application/x-www-form-urlencoded" -Body $body).access_token
 }
 
-# Graph token only (AAD lookup)
-$GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "https://graph.microsoft.com/.default"
-
-$GraphHeaders = @{
-    Authorization = "Bearer $GraphAccessToken"
-    Accept        = "application/json"
-}
-# --- PAT / Auth ---
-if (-not $env:AZURE_DEVOPS_EXT_PAT) {
-    throw "Missing AZURE_DEVOPS_EXT_PAT. Set it as a secret pipeline variable and pass via env."
-}
-
-$pat = $env:AZURE_DEVOPS_EXT_PAT
-$base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
-
-$AdoHeaders = @{
-    Authorization = "Basic $base64"
-    Accept        = "application/json"
-    "Content-Type"= "application/json"
-}
-
-# =========================
-# REST HELPERS
-# =========================
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
@@ -136,25 +84,7 @@ function Get-OrgNameFromUrl {
     if ($OrgUrl -match '^https://dev\.azure\.com/([^/]+)') { return $Matches[1] }
     throw "Organization must be https://dev.azure.com/{org}. Got: $OrgUrl"
 }
-$orgName = Get-OrgNameFromUrl -OrgUrl $Organization
 
-# =========================
-# PARSE CLIENTS / ROLES
-# =========================
-try { $clients = @($ClientsJson | ConvertFrom-Json) } catch { throw "ClientsJson must be JSON array. Got: $ClientsJson" }
-$clients = $clients | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
-if ($clients.Count -lt 1) { throw "At least 1 client is required." }
-
-try { $roles = @($RolesJson | ConvertFrom-Json) } catch { throw "RolesJson must be JSON array. Got: $RolesJson" }
-$roles = $roles | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
-if ($roles.Count -lt 1) { throw "At least 1 role is required." }
-
-Write-Host "Clients: $($clients -join ', ')"
-Write-Host "Roles: $($roles -join ', ')"
-
-# =========================
-# CORE: PROJECT + TEAM
-# =========================
 function Get-ProjectIdByName {
     param([string]$Org, [string]$ProjectName)
 
@@ -182,7 +112,7 @@ function Get-ProjectIdByName {
     return $null
 }
 
-function Ensure-Team {
+function Create-Team {
     param([string]$Org, [string]$ProjectId, [string]$TeamName, [bool]$DryRun)
 
     $listUri   = "$Org/_apis/projects/$ProjectId/teams?api-version=$ApiVersionCore"         # Teams - Get Teams [4](https://www.powershellgallery.com/packages/ado.core/1.0.20/Content/functions%5Cget-adoclassificationnode.ps1)
@@ -205,17 +135,6 @@ function Ensure-Team {
     return $created
 }
 
-$projectId = Get-ProjectIdByName -Org $Organization -ProjectName $Project
-if (-not $projectId) { throw "Project '$Project' not found / not accessible." }
-
-$projectEsc = [uri]::EscapeDataString($Project)
-$teamEsc    = [uri]::EscapeDataString($TeamName)
-
-$teamObj = Ensure-Team -Org $Organization -ProjectId $projectId -TeamName $TeamName -DryRun $DryRun
-
-# =========================
-# WIT: AREA PATHS (Project\Team\Client)
-# =========================
 function Test-AreaExists {
     param([string]$Org, [string]$ProjectEsc, [string[]]$FullPathSegments)
 
@@ -231,7 +150,7 @@ function Test-AreaExists {
     }
 }
 
-function Ensure-AreaNode {
+function Create-AreaNode {
     param([string]$Org, [string]$ProjectEsc, [string[]]$ParentSegments, [string]$Name, [bool]$DryRun)
 
     $fullPath = @()
@@ -259,14 +178,6 @@ function Ensure-AreaNode {
     Write-Host "[Area] Created: $($fullPath -join '\')"
 }
 
-Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @()        -Name $TeamName -DryRun $DryRun
-foreach ($c in $clients) {
-    Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @($TeamName) -Name $c -DryRun $DryRun
-}
-
-# =========================
-# WORK: TEAM FIELD VALUES (AreaPath)
-# =========================
 function Update-TeamFieldValues {
     param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc, [string]$ProjectName, [string]$TeamName, [string[]]$Clients, [bool]$DryRun)
 
@@ -287,13 +198,6 @@ function Update-TeamFieldValues {
     Write-Host "[TeamFieldValues] Updated"
 }
 
-if (-not $SkipTeamFieldValues) {
-    Update-TeamFieldValues -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc -ProjectName $Project -TeamName $TeamName -Clients $clients -DryRun $DryRun
-}
-
-# =========================
-# GRAPH: TEAM MEMBERSHIP GROUPS (ADO Graph)
-# =========================
 function Get-ProjectScopeDescriptor {
     param([string]$OrgName, [string]$ProjectId)
 
@@ -362,35 +266,6 @@ function Add-GraphMembershipIdempotent {
     }
 }
 
-if (-not $SkipTeamMembershipGroups) {
-    try {
-        $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
-        $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
-
-        $teamGroupDesc = Find-TeamGroupDescriptor -Groups $graphGroups -TeamName $TeamName
-        if (-not $teamGroupDesc) {
-            Write-Warning "Team membership group not found for '$TeamName'."
-        } else {
-            foreach ($c in $clients) {
-                foreach ($r in $roles) {
-                    $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
-                    if (-not $roleDesc) {
-                        Write-Warning "Group not found in ADO Graph: '$c $r' (skipping)"
-                        continue
-                    }
-                    Add-GraphMembershipIdempotent -OrgName $orgName -SubjectDescriptor $roleDesc -ContainerDescriptor $teamGroupDesc -DryRun $DryRun
-                    Write-Host "Ensured: '$c $r' is in Team '$TeamName'"
-                }
-            }
-        }
-    } catch {
-        Write-Warning "Team membership group config error: $($_.Exception.Message)"
-    }
-}
-
-# =========================
-# WORK: ITERATION ASSIGNMENT (current date forward) — kept as-is; ensure api-version on calls
-# =========================
 function Resolve-YearAndFromDate {
     param([int]$YearOfIteration)
     $now = Get-Date
@@ -421,6 +296,132 @@ function Add-TeamIteration {
     if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamEsc, "Assign Iteration")) { return }
     Invoke-AdoRest -Method POST -Uri $uri -Body @{ id = $IterationId } | Out-Null
 }
+
+# =========================
+# VARIABLES
+# =========================
+$Organization = $Organization.TrimEnd('/')
+$ApiVersionCore = "7.1"
+$ApiVersionWit  = "7.1"
+$ApiVersionWork = "7.1"
+$ApiVersionGraphPreview = "7.1-preview.1"
+$TenantId     = $env:AAD_TENANT_ID
+$ClientId     = $env:AAD_CLIENT_ID
+$ClientSecret = $env:AAD_CLIENT_SECRET
+
+Write-Host "`n=== Bootstrap Team Script ==="
+Write-Host "Organization: $Organization"
+Write-Host "Project: $Project"
+Write-Host "TeamName: $TeamName"
+Write-Host "DryRun: $DryRun"
+Write-Host "SkipTeamFieldValues: $SkipTeamFieldValues"
+Write-Host "SkipTeamMembershipGroups: $SkipTeamMembershipGroups"
+Write-Host "SkipIterationAssignment: $SkipIterationAssignment"
+
+if ([string]::IsNullOrWhiteSpace($TenantId))     { throw "Missing AAD_TENANT_ID env var." }
+if ([string]::IsNullOrWhiteSpace($ClientId))     { throw "Missing AAD_CLIENT_ID env var." }
+if ([string]::IsNullOrWhiteSpace($ClientSecret)) { throw "Missing AAD_CLIENT_SECRET env var." }
+
+Write-Host "AAD vars OK: TenantId=$TenantId, ClientId=$ClientId, SecretLength=$($ClientSecret.Length)"
+
+# Graph token only (AAD lookup)
+$GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "https://graph.microsoft.com/.default"
+
+$GraphHeaders = @{
+    Authorization = "Bearer $GraphAccessToken"
+    Accept        = "application/json"
+}
+# --- PAT / Auth ---
+if (-not $env:AZURE_DEVOPS_EXT_PAT) {
+    throw "Missing AZURE_DEVOPS_EXT_PAT. Set it as a secret pipeline variable and pass via env."
+}
+
+$pat = $env:AZURE_DEVOPS_EXT_PAT
+$base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$pat"))
+
+$AdoHeaders = @{
+    Authorization = "Basic $base64"
+    Accept        = "application/json"
+    "Content-Type"= "application/json"
+}
+
+$orgName = Get-OrgNameFromUrl -OrgUrl $Organization
+
+# =========================
+# PARSE CLIENTS / ROLES
+# =========================
+try { $clients = @($ClientsJson | ConvertFrom-Json) } catch { throw "ClientsJson must be JSON array. Got: $ClientsJson" }
+$clients = $clients | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+if ($clients.Count -lt 1) { throw "At least 1 client is required." }
+
+try { $roles = @($RolesJson | ConvertFrom-Json) } catch { throw "RolesJson must be JSON array. Got: $RolesJson" }
+$roles = $roles | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+if ($roles.Count -lt 1) { throw "At least 1 role is required." }
+
+Write-Host "Clients: $($clients -join ', ')"
+Write-Host "Roles: $($roles -join ', ')"
+
+# =========================
+# CREATE TEAM
+# =========================
+$projectId = Get-ProjectIdByName -Org $Organization -ProjectName $Project
+if (-not $projectId) { throw "Project '$Project' not found / not accessible." }
+
+$projectEsc = [uri]::EscapeDataString($Project)
+$teamEsc    = [uri]::EscapeDataString($TeamName)
+
+$teamObj = Create-Team -Org $Organization -ProjectId $projectId -TeamName $TeamName -DryRun $DryRun
+
+# =========================
+# CREATE ROOT AREA AND AREA PATH PER CLIENT
+# =========================
+
+Create-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @()        -Name $TeamName -DryRun $DryRun
+foreach ($c in $clients) {
+    Create-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @($TeamName) -Name $c -DryRun $DryRun
+}
+
+# =========================
+# WORK: TEAM FIELD VALUES (AreaPath)
+# =========================
+
+if (-not $SkipTeamFieldValues) {
+    Update-TeamFieldValues -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc -ProjectName $Project -TeamName $TeamName -Clients $clients -DryRun $DryRun
+}
+
+# =========================
+# GRAPH: TEAM MEMBERSHIP GROUPS (ADO Graph)
+# =========================
+
+if (-not $SkipTeamMembershipGroups) {
+    try {
+        $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
+        $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
+
+        $teamGroupDesc = Find-TeamGroupDescriptor -Groups $graphGroups -TeamName $TeamName
+        if (-not $teamGroupDesc) {
+            Write-Warning "Team membership group not found for '$TeamName'."
+        } else {
+            foreach ($c in $clients) {
+                foreach ($r in $roles) {
+                    $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
+                    if (-not $roleDesc) {
+                        Write-Warning "Group not found in ADO Graph: '$c $r' (skipping)"
+                        continue
+                    }
+                    Add-GraphMembershipIdempotent -OrgName $orgName -SubjectDescriptor $roleDesc -ContainerDescriptor $teamGroupDesc -DryRun $DryRun
+                    Write-Host "Ensured: '$c $r' is in Team '$TeamName'"
+                }
+            }
+        }
+    } catch {
+        Write-Warning "Team membership group config error: $($_.Exception.Message)"
+    }
+}
+
+# =========================
+# WORK: ITERATION ASSIGNMENT (current date forward) — kept as-is; ensure api-version on calls
+# =========================
 
 if (-not $SkipIterationAssignment) {
     # If you later re-add YearOfIteration param, plug it here.
