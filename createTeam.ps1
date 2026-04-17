@@ -236,8 +236,7 @@ function Find-ClientRoleGroupDescriptor {
 
 function Find-AadGroupObjectIdByDisplayName {
     param(
-        [Parameter(Mandatory)][string]$DisplayName,
-        [Parameter(Mandatory)][string]$GraphAccessToken
+        [Parameter(Mandatory)][string]$DisplayName
     )
 
     $safe = $DisplayName.Replace("'", "''")
@@ -426,7 +425,7 @@ if (-not $SkipTeamMembershipGroups) {
                 foreach ($r in $roles) {
                     
                     $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
-                    $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName -GraphAccessToken $GraphAccessToken
+                    $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
 
                     if (-not $oid) {
                         Write-Warning "AAD group not found: '$aadName' (skipping)"
