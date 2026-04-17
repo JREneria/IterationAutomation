@@ -202,7 +202,8 @@ function Get-GraphGroupsInScope {
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
         $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  
-
+        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $headers
+        
         # --- Diagnostics (helps immediately when content isn't JSON) ---
         $contentType = $resp.Headers.'Content-Type'
         Write-Host "[Graph] Status=$($resp.StatusCode) Content-Type=$contentType"
@@ -216,7 +217,6 @@ function Get-GraphGroupsInScope {
         }
         # --------------------------------------------------------------
 
-        $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $headers
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
         $continuation = $resp.Headers.'X-MS-ContinuationToken'
