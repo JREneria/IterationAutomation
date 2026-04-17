@@ -382,6 +382,10 @@ $GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -Clie
 
 $payload = Get-JwtPayload -Jwt $GraphAccessToken
 
+Write-Host "aud   : $($payload.aud)"
+Write-Host "appid : $($payload.appid)"
+Write-Host "roles : $($payload.roles -join ', ')"
+
 $GraphHeaders = @{
     Authorization = "Bearer $GraphAccessToken"
     Accept        = "application/json"
