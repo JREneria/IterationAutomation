@@ -254,7 +254,7 @@ function Find-AadGroupObjectIdByDisplayName {
         "{0}={1}" -f [uri]::EscapeDataString($_.Key), [uri]::EscapeDataString($_.Value)
     }) -join '&'
 
-    $resp = Invoke-MsGraph -Method GET -Uri $uri 
+    $resp = Invoke-MsGraph -Method GET -Uri $ub 
     if (-not $resp.value -or $resp.value.Count -eq 0) { return $null }
     return $resp.value[0].id
 }
