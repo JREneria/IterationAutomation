@@ -67,12 +67,62 @@ if ($token -match '^eyJ') {
     Write-Host "Auth mode: Basic (PAT)"
 }
 
+# ============================
+# AAD Service Principal variables (from pipeline env)
+# ============================
+$TenantId     = $env:AAD_TENANT_ID
+$ClientId     = $env:AAD_CLIENT_ID
+$ClientSecret = $env:AAD_CLIENT_SECRET
+
+# Validate presence
+if ([string]::IsNullOrWhiteSpace($TenantId)) {
+    throw "Missing AAD_TENANT_ID environment variable."
+}
+if ([string]::IsNullOrWhiteSpace($ClientId)) {
+    throw "Missing AAD_CLIENT_ID environment variable."
+}
+if ([string]::IsNullOrWhiteSpace($ClientSecret)) {
+    throw "Missing AAD_CLIENT_SECRET environment variable (should be a secret variable)."
+}
+
+Write-Host "AAD variables present: TenantId=$TenantId, ClientId=$ClientId, ClientSecretLength=$($ClientSecret.Length)"
+
+function Get-OAuthToken {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$TenantId,
+        [Parameter(Mandatory)][string]$ClientId,
+        [Parameter(Mandatory)][string]$ClientSecret,
+        [Parameter(Mandatory)][string]$Scope
+    )
+
+    $tokenUri = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token"
+
+    $body = @{
+        client_id     = $ClientId
+        client_secret = $ClientSecret
+        scope         = $Scope
+        grant_type    = "client_credentials"
+    }
+
+    $resp = Invoke-RestMethod -Method POST -Uri $tokenUri -ContentType "application/x-www-form-urlencoded" -Body $body
+    return $resp.access_token
+}
+
+# Microsoft Graph token (for AAD group lookup)
+$GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "https://graph.microsoft.com/.default"
+
+# Azure DevOps token (for ADO Graph operations)
+# Azure DevOps uses the resource/app ID 499b84ac-1321-427f-aa17-267ca6975798 with /.default
+$AdoAccessToken   = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "499b84ac-1321-427f-aa17-267ca6975798/.default"
+
+Write-Host "Tokens acquired: GraphToken=$([bool]$GraphAccessToken), AdoToken=$([bool]$AdoAccessToken)"
+
 $headers = @{
-    Authorization = $authHeaderValue
+    Authorization = "Bearer $AdoAccessToken"
     Accept        = "application/json;api-version=7.1"
     "Content-Type"= "application/json"
 }
-
 # ----------------------------
 # Helpers: HTTP error parsing (PS7 + Windows PS)
 # ----------------------------
@@ -110,19 +160,25 @@ function Get-HttpErrorBody {
 # ----------------------------
 # Helper: REST caller (api-version in URL per guidance) [13](https://learn.microsoft.com/en-us/azure/devops/integrate/how-to/call-rest-api?view=azure-devops)[14](https://learn.microsoft.com/en-us/rest/api/azure/devops/?view=azure-devops-rest-7.2)
 # ----------------------------
+
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
         [Parameter(Mandatory)][string]$Uri,
-        [Parameter()] $Body
+        [Parameter()] $Body,
+        [Parameter()] [hashtable] $HeadersOverride
     )
+
+    $h = if ($HeadersOverride) { $HeadersOverride } else { $headers }
+
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -Body $json
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $h -Body $json -ContentType "application/json"
     } else {
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $h
     }
 }
+
 
 # ----------------------------
 # Parse clients list
