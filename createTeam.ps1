@@ -358,8 +358,6 @@ $TenantId     = $env:AAD_TENANT_ID
 $ClientId     = $env:AAD_CLIENT_ID
 $ClientSecret = $env:AAD_CLIENT_SECRET
 
-$payload = Get-JwtPayload -Jwt $GraphAccessToken
-
 Write-Host "aud   : $($payload.aud)"
 Write-Host "appid : $($payload.appid)"
 Write-Host "roles : $($payload.roles -join ', ')"
@@ -381,6 +379,8 @@ Write-Host "AAD vars OK: TenantId=$TenantId, ClientId=$ClientId, SecretLength=$(
 
 # Graph token only (AAD lookup)
 $GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "https://graph.microsoft.com/.default"
+
+$payload = Get-JwtPayload -Jwt $GraphAccessToken
 
 $GraphHeaders = @{
     Authorization = "Bearer $GraphAccessToken"
