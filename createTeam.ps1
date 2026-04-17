@@ -93,17 +93,7 @@ function Get-ProjectIdByName {
     $skip = 0; $top = 100
     while ($true) {
         $uri = "$Org/_apis/projects?`$top=$top&`$skip=$skip&api-version=$ApiVersionCore"  
-        
         $resp = Invoke-AdoRest -Method GET -Uri $uri
-        Write-Host "DEBUG Projects List URI: $uri"
-        Write-Host "DEBUG Response keys: $($resp.PSObject.Properties.Name -join ', ')"
-        Write-Host "DEBUG Project count: $($resp.count)"
-        if ($resp.value) {
-          Write-Host "DEBUG First 5 project names: $((@($resp.value) | Select-Object -First 5 -ExpandProperty name) -join ', ')"
-        } else {
-          Write-Host "DEBUG resp.value is null/empty"
-        }
-        
         $match = @($resp.value) | Where-Object { $_.name -eq $ProjectName } | Select-Object -First 1
         if ($match) { return $match.id }
         if (-not $resp.value -or $resp.value.Count -lt $top) { break }
