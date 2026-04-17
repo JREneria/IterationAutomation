@@ -129,7 +129,7 @@ function Test-AreaExists {
     param([string]$Org, [string]$ProjectEsc, [string[]]$FullPathSegments)
 
     $encodedPath = ($FullPathSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/"
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath?api-version=$ApiVersionWit"   # Classification Nodesithub.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)[2](https://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/${encodedPath}?api-version=${ApiVersionWit}"   # Classification Nodesithub.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)[2](https://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)
 
     try {
         Invoke-AdoRest -Method GET -Uri $uri | Out-Null
@@ -157,7 +157,7 @@ function Create-AreaNode {
         $parentPath = "/" + (($ParentSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/")
     }
 
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=$ApiVersionWit"   # Classification Nodes CreateOrUpdate tps://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)[7](https://www.linkedin.com/pulse/power-automate-vs-logic-apps-finding-right-microsoft-tool-nishad-owgne)
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas${parentPath}?api-version=${ApiVersionWit}"   # Classification Nodes CreateOrUpdate tps://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)[7](https://www.linkedin.com/pulse/power-automate-vs-logic-apps-finding-right-microsoft-tool-nishad-owgne)
     Write-Host $uri
     if ($DryRun -or -not $PSCmdlet.ShouldProcess(($fullPath -join '\'), "Create Area Node")) {
         Write-Host "[Area] DryRun/WhatIf: would create $($fullPath -join '\')"
