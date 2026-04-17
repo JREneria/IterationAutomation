@@ -330,6 +330,22 @@ function Add-TeamIteration {
     Invoke-AdoRest -Method POST -Uri $uri -Body @{ id = $IterationId } | Out-Null
 }
 
+function Get-JwtPayload {
+    param([Parameter(Mandatory)][string]$Jwt)
+
+    $parts = $Jwt.Split('.')
+    if ($parts.Count -lt 2) { throw "Not a JWT token." }
+
+    $payload = $parts[1].Replace('-', '+').Replace('_', '/')
+    switch ($payload.Length % 4) {
+        2 { $payload += '==' }
+        3 { $payload += '=' }
+    }
+
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload))
+    return $json | ConvertFrom-Json
+}
+
 # =========================
 # VARIABLES
 # =========================
@@ -341,6 +357,12 @@ $ApiVersionGraphPreview = "7.1-preview.1"
 $TenantId     = $env:AAD_TENANT_ID
 $ClientId     = $env:AAD_CLIENT_ID
 $ClientSecret = $env:AAD_CLIENT_SECRET
+
+$payload = Get-JwtPayload -Jwt $GraphAccessToken
+
+Write-Host "aud   : $($payload.aud)"
+Write-Host "appid : $($payload.appid)"
+Write-Host "roles : $($payload.roles -join ', ')"
 
 Write-Host "`n=== Bootstrap Team Script ==="
 Write-Host "Organization: $Organization"
@@ -427,9 +449,6 @@ if (-not $SkipTeamFieldValues) {
 # =========================
 
 if (-not $SkipTeamMembershipGroups) {
-    
-                    $id = Find-AadGroupObjectIdByDisplayName -DisplayName "AdvocateAurora Developers"
-                    Write-Host "AAD group id: $id"
     try {
         $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
         $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
