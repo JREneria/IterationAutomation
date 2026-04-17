@@ -158,7 +158,6 @@ function Create-AreaNode {
     }
 
     $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas${parentPath}?api-version=${ApiVersionWit}"   
-    Write-Host $uri
     if ($DryRun -or -not $PSCmdlet.ShouldProcess(($fullPath -join '\'), "Create Area Node")) {
         Write-Host "[Area] DryRun/WhatIf: would create $($fullPath -join '\')"
         return
@@ -191,7 +190,7 @@ function Update-TeamFieldValues {
 function Get-ProjectScopeDescriptor {
     param([string]$OrgName, [string]$ProjectId)
 
-    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/${ProjectId}?api-version=7.1"  # Descriptors Get [10](https://stackoverflow.com/questions/78708204/i-want-to-publish-a-zip-file-and-then-download-it-directly-from-azure-artifact-f)
+    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/${ProjectId}?api-version=7.1"  
     (Invoke-AdoRest -Method GET -Uri $uri).value
 }
 
@@ -202,8 +201,8 @@ function Get-GraphGroupsInScope {
     $continuation = $null
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
-        $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  # Groups List /stackoverflow.com/questions/79901604/how-to-get-a-list-of-all-azure-devops-project-users-using-rest-api-with-typescri)[12](https://learn.microsoft.com/en-us/rest/api/azure/devops/graph/descriptors?view=azure-devops-rest-7.1)
-
+        $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))${ctPart}&api-version=${ApiVersionGraphPreview}"  
+        Write-Host $uri
         $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $headers
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
