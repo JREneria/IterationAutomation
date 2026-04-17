@@ -1,21 +1,20 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [Parameter(Mandatory = $true)]
-    [string]$Organization,   # e.g. https://dev.azure.com/your-org
+    [string]$Organization,   # https://dev.azure.com/your-org
 
     [Parameter(Mandatory = $true)]
-    [string]$Project,        # Project name
+    [string]$Project,
 
     [Parameter(Mandatory = $true)]
-    [string]$TeamName,       # New team name
+    [string]$TeamName,
 
     [Parameter(Mandatory = $true)]
-    [string]$ClientsJson,    # JSON array e.g. ["ClientA","ClientB"]
-    
+    [string]$ClientsJson,
+
     [Parameter(Mandatory = $false)]
-    [string]$RolesJson = '["Developers","Business Analysts", "Benefits System Administrators", "Project Managers"]',
+    [string]$RolesJson = '["Developers","Business Analysts","Benefits System Administrators","Project Managers"]',
 
-    # Safety switches
     [Parameter(Mandatory = $false)]
     [bool]$DryRun = $false,
 
@@ -29,63 +28,36 @@ param(
     [bool]$SkipIterationAssignment = $false
 )
 
-# ----------------------------
-# Logging: inputs
-# ----------------------------
+# =========================
+# CONFIG + INPUTS
+# =========================
+$Organization = $Organization.TrimEnd('/')
+$ApiVersionCore = "7.1"
+$ApiVersionWit  = "7.1"
+$ApiVersionWork = "7.1"
+$ApiVersionGraphPreview = "7.1-preview.1"
+
 Write-Host "`n=== Bootstrap Team Script ==="
 Write-Host "Organization: $Organization"
 Write-Host "Project: $Project"
 Write-Host "TeamName: $TeamName"
-Write-Host "YearOfIteration: $YearOfIteration"
 Write-Host "DryRun: $DryRun"
 Write-Host "SkipTeamFieldValues: $SkipTeamFieldValues"
 Write-Host "SkipTeamMembershipGroups: $SkipTeamMembershipGroups"
 Write-Host "SkipIterationAssignment: $SkipIterationAssignment"
 
-# Normalize org URL
-$Organization = $Organization.TrimEnd('/')
-
-# ----------------------------
-# Auth token
-# ----------------------------
-if (-not $env:AZURE_DEVOPS_EXT_PAT) {
-    throw "Missing AZURE_DEVOPS_EXT_PAT. In Azure Pipelines, map env: AZURE_DEVOPS_EXT_PAT: $(System.AccessToken) or a PAT."
-}
-$token = $env:AZURE_DEVOPS_EXT_PAT
-Write-Host "Token provided: $([bool]$token) (length=$($token.Length))"
-
-# Detect token type:
-# - System.AccessToken is typically a JWT (starts with eyJ...)
-# - PAT is opaque; use Basic with ":PAT"
-$authHeaderValue = $null
-if ($token -match '^eyJ') {
-    $authHeaderValue = "Bearer $token"
-    Write-Host "Auth mode: Bearer (System.AccessToken/JWT)"
-} else {
-    $base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(":$token"))
-    $authHeaderValue = "Basic $base64"
-    Write-Host "Auth mode: Basic (PAT)"
-}
-
-# ============================
-# AAD Service Principal variables (from pipeline env)
-# ============================
+# =========================
+# AUTH / TOKENS (Service Principal)
+# =========================
 $TenantId     = $env:AAD_TENANT_ID
 $ClientId     = $env:AAD_CLIENT_ID
 $ClientSecret = $env:AAD_CLIENT_SECRET
 
-# Validate presence
-if ([string]::IsNullOrWhiteSpace($TenantId)) {
-    throw "Missing AAD_TENANT_ID environment variable."
-}
-if ([string]::IsNullOrWhiteSpace($ClientId)) {
-    throw "Missing AAD_CLIENT_ID environment variable."
-}
-if ([string]::IsNullOrWhiteSpace($ClientSecret)) {
-    throw "Missing AAD_CLIENT_SECRET environment variable (should be a secret variable)."
-}
+if ([string]::IsNullOrWhiteSpace($TenantId))     { throw "Missing AAD_TENANT_ID env var." }
+if ([string]::IsNullOrWhiteSpace($ClientId))     { throw "Missing AAD_CLIENT_ID env var." }
+if ([string]::IsNullOrWhiteSpace($ClientSecret)) { throw "Missing AAD_CLIENT_SECRET env var." }
 
-Write-Host "AAD variables present: TenantId=$TenantId, ClientId=$ClientId, ClientSecretLength=$($ClientSecret.Length)"
+Write-Host "AAD vars OK: TenantId=$TenantId, ClientId=$ClientId, SecretLength=$($ClientSecret.Length)"
 
 function Get-OAuthToken {
     [CmdletBinding()]
@@ -97,7 +69,6 @@ function Get-OAuthToken {
     )
 
     $tokenUri = "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token"
-
     $body = @{
         client_id     = $ClientId
         client_secret = $ClientSecret
@@ -105,365 +76,236 @@ function Get-OAuthToken {
         grant_type    = "client_credentials"
     }
 
-    $resp = Invoke-RestMethod -Method POST -Uri $tokenUri -ContentType "application/x-www-form-urlencoded" -Body $body
-    return $resp.access_token
+    (Invoke-RestMethod -Method POST -Uri $tokenUri -ContentType "application/x-www-form-urlencoded" -Body $body).access_token
 }
 
-# Microsoft Graph token (for AAD group lookup)
+# Graph token only (AAD lookup)
 $GraphAccessToken = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "https://graph.microsoft.com/.default"
 
-# Azure DevOps token (for ADO Graph operations)
-# Azure DevOps uses the resource/app ID 499b84ac-1321-427f-aa17-267ca6975798 with /.default
-$AdoAccessToken   = Get-OAuthToken -TenantId $TenantId -ClientId $ClientId -ClientSecret $ClientSecret -Scope "499b84ac-1321-427f-aa17-267ca6975798/.default"
+$GraphHeaders = @{
+    Authorization = "Bearer $GraphAccessToken"
+    Accept        = "application/json"
+}
 
-Write-Host "Tokens acquired: GraphToken=$([bool]$GraphAccessToken), AdoToken=$([bool]$AdoAccessToken)"
-
-$headers = @{
+$AdoHeaders = @{
     Authorization = "Bearer $AdoAccessToken"
-    Accept        = "application/json;api-version=7.1"
+    Accept        = "application/json"
     "Content-Type"= "application/json"
 }
-# ----------------------------
-# Helpers: HTTP error parsing (PS7 + Windows PS)
-# ----------------------------
-function Get-HttpStatusCode {
-    param([object]$ErrorRecord)
-    $resp = $ErrorRecord.Exception.Response
-    if ($resp -is [System.Net.Http.HttpResponseMessage]) {
-        return [int]$resp.StatusCode
-    }
-    if ($ErrorRecord.Exception.Response -and $ErrorRecord.Exception.Response.StatusCode) {
-        return [int]$ErrorRecord.Exception.Response.StatusCode
-    }
-    return $null
-}
 
-function Get-HttpErrorBody {
-    param([object]$ErrorRecord)
-
-    $resp = $ErrorRecord.Exception.Response
-    if ($resp -and $resp -is [System.Net.Http.HttpResponseMessage]) {
-        try { return $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() } catch { return $null }
-    }
-    if ($ErrorRecord.Exception.Response -and $ErrorRecord.Exception.Response.GetResponseStream) {
-        try {
-            $reader = New-Object System.IO.StreamReader($ErrorRecord.Exception.Response.GetResponseStream())
-            return $reader.ReadToEnd()
-        } catch { return $null }
-    }
-    if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) {
-        return $ErrorRecord.ErrorDetails.Message
-    }
-    return $null
-}
-
-# ----------------------------
-# Helper: REST caller (api-version in URL per guidance) [13](https://learn.microsoft.com/en-us/azure/devops/integrate/how-to/call-rest-api?view=azure-devops)[14](https://learn.microsoft.com/en-us/rest/api/azure/devops/?view=azure-devops-rest-7.2)
-# ----------------------------
-
+# =========================
+# REST HELPERS
+# =========================
 function Invoke-AdoRest {
     param(
         [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
         [Parameter(Mandatory)][string]$Uri,
-        [Parameter()] $Body,
-        [Parameter()] [hashtable] $HeadersOverride
+        [Parameter()] $Body
     )
-
-    $h = if ($HeadersOverride) { $HeadersOverride } else { $headers }
 
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 50
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $h -Body $json -ContentType "application/json"
-    } else {
-        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $h
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $AdoHeaders -Body $json -ContentType "application/json"
     }
+    return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $AdoHeaders
 }
 
+function Invoke-MsGraph {
+    param(
+        [Parameter(Mandatory)][ValidateSet("GET","POST","PATCH","PUT","DELETE")] [string]$Method,
+        [Parameter(Mandatory)][string]$Uri,
+        [Parameter()] $Body
+    )
 
-# ----------------------------
-# Parse clients list
-# ----------------------------
-try {
-    $clients = @($ClientsJson | ConvertFrom-Json)
-} catch {
-    throw "ClientsJson must be a JSON array, e.g. ['ClientA','ClientB']. Received: $ClientsJson"
+    if ($null -ne $Body) {
+        $json = $Body | ConvertTo-Json -Depth 50
+        return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $GraphHeaders -Body $json -ContentType "application/json"
+    }
+    return Invoke-RestMethod -Method $Method -Uri $Uri -Headers $GraphHeaders
 }
-$clients = $clients | ForEach-Object { "$_".Trim() } | Where-Object { $_ -ne "" } | Select-Object -Unique
-if ($clients.Count -lt 1) { throw "At least 1 client is required." }
 
-Write-Host "Clients resolved ($($clients.Count)): $($clients -join ', ')"
-
-# ----------------------------
-# Parse roles list
-# ----------------------------
-$roles = @($RolesJson | ConvertFrom-Json) | ForEach-Object { "$_".Trim() } | Where-Object { $_ -ne "" } | Select-Object -Unique
-if ($roles.Count -lt 1) { throw "At least 1 role is required." }
-Write-Host "Roles resolved ($($roles.Count)): $($roles -join ', ')"
-
-# ----------------------------
-# Resolve org short name (for vssps.dev.azure.com Graph endpoints)
-# ----------------------------
 function Get-OrgNameFromUrl {
     param([string]$OrgUrl)
-    # Handles https://dev.azure.com/{org}
-    if ($OrgUrl -match '^https://dev\.azure\.com/([^/]+)') {
-        return $Matches[1]
-    }
-    throw "Organization URL must be in form https://dev.azure.com/{org}. Got: $OrgUrl"
+    if ($OrgUrl -match '^https://dev\.azure\.com/([^/]+)') { return $Matches[1] }
+    throw "Organization must be https://dev.azure.com/{org}. Got: $OrgUrl"
 }
 $orgName = Get-OrgNameFromUrl -OrgUrl $Organization
 
-# ----------------------------
-# (1) Resolve ProjectId (idempotent lookup)
-# Uses Projects - List and filters by name. ://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1)
-# ----------------------------
+# =========================
+# PARSE CLIENTS / ROLES
+# =========================
+try { $clients = @($ClientsJson | ConvertFrom-Json) } catch { throw "ClientsJson must be JSON array. Got: $ClientsJson" }
+$clients = $clients | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+if ($clients.Count -lt 1) { throw "At least 1 client is required." }
+
+try { $roles = @($RolesJson | ConvertFrom-Json) } catch { throw "RolesJson must be JSON array. Got: $RolesJson" }
+$roles = $roles | ForEach-Object { "$_".Trim() } | Where-Object { $_ } | Select-Object -Unique
+if ($roles.Count -lt 1) { throw "At least 1 role is required." }
+
+Write-Host "Clients: $($clients -join ', ')"
+Write-Host "Roles: $($roles -join ', ')"
+
+# =========================
+# CORE: PROJECT + TEAM
+# =========================
 function Get-ProjectIdByName {
     param([string]$Org, [string]$ProjectName)
 
-    Write-Host "[Get-ProjectIdByName] Resolving projectId for '$ProjectName'..."
-
-    # If it's already a GUID, accept it
     if ($ProjectName -match '^[0-9a-fA-F-]{36}$') { return $ProjectName }
 
-    $skip = 0
-    $top  = 100
+    $skip = 0; $top = 100
     while ($true) {
-        $uri = "$Org/_apis/projects?`$top=$top&`$skip=$skip&api-version=7.1"
+        $uri = "$Org/_apis/projects?`$top=$top&`$skip=$skip&api-version=$ApiVersionCore"  # include api-version .com/en-us/rest/api/azure/devops/work/iterations/list?view=azure-devops-rest-7.1)[3](https://www.postman.com/azurearchitecture/azure-devops-rest-api/request/zdmw2vh/classification-nodes-get-root-nodes)
         $resp = Invoke-AdoRest -Method GET -Uri $uri
         $match = @($resp.value) | Where-Object { $_.name -eq $ProjectName } | Select-Object -First 1
         if ($match) { return $match.id }
-
         if (-not $resp.value -or $resp.value.Count -lt $top) { break }
         $skip += $top
     }
-
     return $null
 }
 
-$projectId = Get-ProjectIdByName -Org $Organization -ProjectName $Project
-if (-not $projectId) {
-    throw "Project '$Project' not found or not accessible to this identity."
-}
-Write-Host "ProjectId: $projectId"
-
-$projectEsc = [uri]::EscapeDataString($Project)
-$teamEsc    = [uri]::EscapeDataString($TeamName)
-
-# ----------------------------
-# (b) Ensure team exists (idempotent)
-# Teams - Get Teams (list) [2](https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/get-teams?view=azure-devops-rest-7.1)
-# Teams - Create (POST) [1](https://learn.microsoft.com/en-us/rest/api/azure/devops/core/teams/create?view=azure-devops-rest-7.1)
-# ----------------------------
 function Ensure-Team {
     param([string]$Org, [string]$ProjectId, [string]$TeamName, [bool]$DryRun)
 
-    Write-Host "[Ensure-Team] Ensuring team exists: '$TeamName'..."
+    $listUri   = "$Org/_apis/projects/$ProjectId/teams?api-version=$ApiVersionCore"         # Teams - Get Teams [4](https://www.powershellgallery.com/packages/ado.core/1.0.20/Content/functions%5Cget-adoclassificationnode.ps1)
+    $createUri = "$Org/_apis/projects/$ProjectId/teams?api-version=$ApiVersionCore"         # Teams - Create [5](https://www.reddit.com/r/azuredevops/comments/ii7rn0/difference_between_azure_artifacts_and_pipeline/)
 
-    $listUri = "$Org/_apis/projects/$ProjectId/teams"
     $teams = Invoke-AdoRest -Method GET -Uri $listUri
     $existing = @($teams.value) | Where-Object { $_.name -eq $TeamName } | Select-Object -First 1
     if ($existing) {
-        Write-Host "[Ensure-Team] Team already exists. Reusing: '$TeamName' (id=$($existing.id))"
+        Write-Host "[Team] Exists: $TeamName (id=$($existing.id))"
         return $existing
     }
 
     if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamName, "Create Team")) {
-        Write-Host "[Ensure-Team] DryRun/WhatIf: would create team '$TeamName' (skipping)."
+        Write-Host "[Team] DryRun/WhatIf: would create team '$TeamName'"
         return $null
     }
 
-    $createUri = "$Org/_apis/projects/$ProjectId/teams"
-    $body = @{ name = $TeamName }
-
-    try {
-        $created = Invoke-AdoRest -Method POST -Uri $createUri -Body $body
-        Write-Host "[Ensure-Team] Team created: '$TeamName' (id=$($created.id))"
-        return $created
-    } catch {
-        Write-Warning "[Ensure-Team] Create failed; re-checking if team now exists (race condition)..."
-        $teams2 = Invoke-AdoRest -Method GET -Uri $listUri
-        $existing2 = @($teams2.value) | Where-Object { $_.name -eq $TeamName } | Select-Object -First 1
-        if ($existing2) {
-            Write-Host "[Ensure-Team] Team now exists. Reusing: '$TeamName' (id=$($existing2.id))"
-            return $existing2
-        }
-        throw
-    }
+    $created = Invoke-AdoRest -Method POST -Uri $createUri -Body @{ name = $TeamName }
+    Write-Host "[Team] Created: $TeamName (id=$($created.id))"
+    return $created
 }
 
+$projectId = Get-ProjectIdByName -Org $Organization -ProjectName $Project
+if (-not $projectId) { throw "Project '$Project' not found / not accessible." }
+
+$projectEsc = [uri]::EscapeDataString($Project)
+$teamEsc    = [uri]::EscapeDataString($TeamName)
+
 $teamObj = Ensure-Team -Org $Organization -ProjectId $projectId -TeamName $TeamName -DryRun $DryRun
-# Even in DryRun, we can proceed with best-effort for other steps, but membership/iterations need a team path.
+
+# =========================
+# WIT: AREA PATHS (Project\Team\Client)
+# =========================
 function Test-AreaExists {
-    param(
-        [string]$Org,
-        [string]$ProjectEsc,
-        [string[]]$FullPathSegments   # e.g. @('TeamName') or @('TeamName','ClientA')
-    )
+    param([string]$Org, [string]$ProjectEsc, [string[]]$FullPathSegments)
 
     $encodedPath = ($FullPathSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/"
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas/$encodedPath?api-version=$ApiVersionWit"   # Classification Nodesithub.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)[2](https://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)
 
     try {
         Invoke-AdoRest -Method GET -Uri $uri | Out-Null
         return $true
     } catch {
-        $code = $_.Exception.Response.StatusCode.value__
-        if ($code -eq 404) { return $false }
+        if ($_.Exception.Response.StatusCode.value__ -eq 404) { return $false }
         throw
     }
 }
-# ----------------------------
-# (c) Ensure Areas: Project\TeamName\Client (idempotent)
-# Classification Nodes - Create Or Update supports Areas and path nesting. [3](https://www.reddit.com/r/azuredevops/comments/ii7rn0/difference_between_azure_artifacts_and_pipeline/)[4](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/iterations/post-team-iteration?view=azure-devops-rest-7.1)
-# ----------------------------
-function Ensure-AreaNode {
-    param(
-        [string]$Org,
-        [string]$ProjectEsc,
-        [string[]]$ParentSegments,   # @() for root; @('TeamName') for under team
-        [string]$Name,
-        [bool]$DryRun
-    )
 
-    # Build full path (from Areas root)
+function Ensure-AreaNode {
+    param([string]$Org, [string]$ProjectEsc, [string[]]$ParentSegments, [string]$Name, [bool]$DryRun)
+
     $fullPath = @()
     if ($ParentSegments) { $fullPath += $ParentSegments }
     $fullPath += $Name
 
-    Write-Host "[Ensure-AreaNode] Target AreaPath: $($fullPath -join '\')"
-
-    #  Idempotency: if it already exists, do nothing
     if (Test-AreaExists -Org $Org -ProjectEsc $ProjectEsc -FullPathSegments $fullPath) {
-        Write-Host "[Ensure-AreaNode] Exists already. Skipping."
-        return $null
+        Write-Host "[Area] Exists: $($fullPath -join '\')"
+        return
     }
 
-    # Build parent path for CREATE call
     $parentPath = ""
     if ($ParentSegments -and $ParentSegments.Count -gt 0) {
-        $encoded = $ParentSegments | ForEach-Object { [uri]::EscapeDataString($_) }
-        $parentPath = "/" + ($encoded -join "/")
+        $parentPath = "/" + (($ParentSegments | ForEach-Object { [uri]::EscapeDataString($_) }) -join "/")
     }
 
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath"
-    Write-Host "[Ensure-AreaNode] Creating under parent '$($ParentSegments -join '\')' name='$Name'"
-    Write-Host "[Ensure-AreaNode] POST $uri"
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=$ApiVersionWit"   # Classification Nodes CreateOrUpdate tps://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)[7](https://www.linkedin.com/pulse/power-automate-vs-logic-apps-finding-right-microsoft-tool-nishad-owgne)
 
-    if ($DryRun -or -not $PSCmdlet.ShouldProcess("$($fullPath -join '\')", "Create Area Node")) {
-        Write-Host "[Ensure-AreaNode] DryRun/WhatIf: skipping create."
-        return $null
+    if ($DryRun -or -not $PSCmdlet.ShouldProcess(($fullPath -join '\'), "Create Area Node")) {
+        Write-Host "[Area] DryRun/WhatIf: would create $($fullPath -join '\')"
+        return
     }
 
-    $body = @{ name = $Name }
-    return Invoke-AdoRest -Method POST -Uri $uri -Body $body
+    Invoke-AdoRest -Method POST -Uri $uri -Body @{ name = $Name } | Out-Null
+    Write-Host "[Area] Created: $($fullPath -join '\')"
 }
-# Ensure team root area node under project Areas root
-$null = Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @() -Name $TeamName -DryRun $DryRun
 
-# Ensure each client under TeamName
+Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @()        -Name $TeamName -DryRun $DryRun
 foreach ($c in $clients) {
-    $null = Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @($TeamName) -Name $c -DryRun $DryRun
+    Ensure-AreaNode -Org $Organization -ProjectEsc $projectEsc -ParentSegments @($TeamName) -Name $c -DryRun $DryRun
 }
 
-# ----------------------------
-# (c) Configure Team Field Values (System.AreaPath)
-# Teamfieldvalues - Update (PATCH) [5](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/teamfieldvalues/update?view=azure-devops-rest-7.1)[6](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/Teamfieldvalues/Get?view=azure-devops-rest-7.1)
-# ----------------------------
+# =========================
+# WORK: TEAM FIELD VALUES (AreaPath)
+# =========================
 function Update-TeamFieldValues {
-    param(
-        [string]$Org,
-        [string]$ProjectEsc,
-        [string]$TeamEsc,
-        [string]$ProjectName,
-        [string]$TeamName,
-        [string[]]$Clients,
-        [bool]$DryRun
-    )
+    param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc, [string]$ProjectName, [string]$TeamName, [string[]]$Clients, [bool]$DryRun)
 
-    Write-Host "[Update-TeamFieldValues] Setting team area paths (default + allowed values)..."
-
-    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/teamfieldvalues?api-version=7.1"
-
-    # ADO expects AreaPath values like "Project\Area\SubArea" (no leading backslash). [5](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/teamfieldvalues/update?view=azure-devops-rest-7.1)[6](https://learn.microsoft.com/en-us/rest/api/azure/devops/work/Teamfieldvalues/Get?view=azure-devops-rest-7.1)
+    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/teamfieldvalues?api-version=$ApiVersionWork"   # Teamfieldvalues Update [8](https://seekatar.github.io/2025/05/05/pipeline-artifacts.html)[9](https://stackoverflow.com/questions/79124230/how-to-publish-and-download-artifacts-as-zip-in-azure-yaml-pipeline)
     $teamRoot = "$ProjectName\$TeamName"
 
-    $values = @()
-    $values += @{ value = $teamRoot; includeChildren = $true }
-    foreach ($c in $Clients) {
-        $values += @{ value = "$ProjectName\$TeamName\$c"; includeChildren = $true }
-    }
+    $values = @(@{ value = $teamRoot; includeChildren = $true })
+    foreach ($c in $Clients) { $values += @{ value = "$ProjectName\$TeamName\$c"; includeChildren = $true } }
 
-    $body = @{
-        defaultValue = $teamRoot
-        values       = $values
-    }
+    $body = @{ defaultValue = $teamRoot; values = $values }
 
-    if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamName, "PATCH TeamFieldValues (Area Paths)")) {
-        Write-Host "[Update-TeamFieldValues] DryRun/WhatIf: would PATCH $uri"
-        Write-Host ($body | ConvertTo-Json -Depth 10)
+    if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamName, "PATCH TeamFieldValues")) {
+        Write-Host "[TeamFieldValues] DryRun/WhatIf: would PATCH $uri"
         return
     }
 
     Invoke-AdoRest -Method PATCH -Uri $uri -Body $body | Out-Null
-    Write-Host "[Update-TeamFieldValues] Team field values updated."
+    Write-Host "[TeamFieldValues] Updated"
 }
 
 if (-not $SkipTeamFieldValues) {
-    Update-TeamFieldValues -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc `
-        -ProjectName $Project -TeamName $TeamName -Clients $clients -DryRun $DryRun
-} else {
-    Write-Host "[Update-TeamFieldValues] Skipped by flag."
+    Update-TeamFieldValues -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc -ProjectName $Project -TeamName $TeamName -Clients $clients -DryRun $DryRun
 }
 
-# ----------------------------
-# (d) Add client groups to Team membership group
-# Graph Descriptors - Get (projectId -> scope descriptor) [9](https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/classification-nodes/get?view=azure-devops-rest-7.1)
-# Graph Groups - List (scoped) [7](https://multishoring.com/blog/azure-logic-apps-vs-power-automate/)
-# Graph Memberships - Add (PUTyoutube.com/watch?v=jqXss_jArtM)[16](https://learn.microsoft.com/en-us/azure/devops/pipelines/artifacts/pipeline-artifacts?view=azure-devops)
-# ----------------------------
+# =========================
+# GRAPH: TEAM MEMBERSHIP GROUPS (ADO Graph)
+# =========================
 function Get-ProjectScopeDescriptor {
     param([string]$OrgName, [string]$ProjectId)
 
-    Write-Host "[Graph] Resolving project scope descriptor..."
-    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/$ProjectId"
-    $resp = Invoke-AdoRest -Method GET -Uri $uri
-    return $resp.value
+    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/descriptors/$ProjectId?api-version=7.1"  # Descriptors Get [10](https://stackoverflow.com/questions/78708204/i-want-to-publish-a-zip-file-and-then-download-it-directly-from-azure-artifact-f)
+    (Invoke-AdoRest -Method GET -Uri $uri).value
 }
 
 function Get-GraphGroupsInScope {
     param([string]$OrgName, [string]$ScopeDescriptor)
 
-    Write-Host "[Graph] Listing groups in project scope (paged)..."
     $all = @()
     $continuation = $null
-
     do {
         $ctPart = if ($continuation) { "&continuationToken=$([uri]::EscapeDataString($continuation))" } else { "" }
-        $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))$ctPart&api-version=7.1-preview.1"
+        $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/groups?scopeDescriptor=$([uri]::EscapeDataString($ScopeDescriptor))$ctPart&api-version=$ApiVersionGraphPreview"  # Groups List /stackoverflow.com/questions/79901604/how-to-get-a-list-of-all-azure-devops-project-users-using-rest-api-with-typescri)[12](https://learn.microsoft.com/en-us/rest/api/azure/devops/graph/descriptors?view=azure-devops-rest-7.1)
 
-        # Use Invoke-WebRequest to access X-MS-ContinuationToken header. [7](https://multishoring.com/blog/azure-logic-apps-vs-power-automate/)
         $resp = Invoke-WebRequest -Method GET -Uri $uri -Headers $headers
         $json = $resp.Content | ConvertFrom-Json
         $all += @($json.value)
-
         $continuation = $resp.Headers.'X-MS-ContinuationToken'
     } while ($continuation)
 
-    Write-Host "[Graph] Total groups retrieved: $($all.Count)"
-    
-    $all |
-      Sort-Object displayName |
-      ForEach-Object {
-        Write-Host ("- displayName: {0} | principalName: {1}" -f $_.displayName, $_.principalName)
-      }
-
+    Write-Host "[Graph] Groups in scope: $($all.Count)"
     return $all
 }
 
 function Find-TeamGroupDescriptor {
     param([object[]]$Groups, [string]$TeamName)
 
-    Write-Host "[Graph] Finding team membership group descriptor for '$TeamName'..."
     $g = $Groups | Where-Object { $_.displayName -eq $TeamName } | Select-Object -First 1
     if ($g) { return $g.descriptor }
 
@@ -474,17 +316,11 @@ function Find-TeamGroupDescriptor {
 }
 
 function Find-ClientRoleGroupDescriptor {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [object[]] $Groups,
-        [Parameter(Mandatory)] [string] $ClientName,
-        [Parameter(Mandatory)] [string] $RoleName
-    )
+    param([object[]]$Groups, [string]$ClientName, [string]$RoleName)
 
-    $principal = "${ClientName} ${RoleName}"
-    Write-Host "[Graph] Looking for group principalName: '$principal'"
-
-    $g = $Groups | Where-Object { $_.principalName -contains $principal } | Select-Object -First 1
+    # Your current pattern is "ClientA Developers" (space-separated)
+    $principal = "$ClientName $RoleName"
+    $g = $Groups | Where-Object { $_.principalName -eq $principal } | Select-Object -First 1
     if ($g) { return $g.descriptor }
     return $null
 }
@@ -492,28 +328,19 @@ function Find-ClientRoleGroupDescriptor {
 function Add-GraphMembershipIdempotent {
     param([string]$OrgName, [string]$SubjectDescriptor, [string]$ContainerDescriptor, [bool]$DryRun)
 
-    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/memberships/$SubjectDescriptor/$ContainerDescriptor?api-version=7.1-preview.1"
-    Write-Host "[Graph] Adding membership (subject -> team group)..."
+    $uri = "https://vssps.dev.azure.com/$OrgName/_apis/graph/memberships/$SubjectDescriptor/$ContainerDescriptor?api-version=$ApiVersionGraphPreview"  # Memberships Add [13](https://www.youtube.com/watch?v=RXQ9jZmKzfE)[14](https://michelcarlo.com/2024/07/27/how-to-create-azure-devops-pull-requests-using-power-automate/)
 
     if ($DryRun -or -not $PSCmdlet.ShouldProcess($ContainerDescriptor, "PUT Graph Membership")) {
-        Write-Host "[Graph] DryRun/WhatIf: would PUT $uri"
+        Write-Host "[Graph] DryRun/WhatIf: would add membership"
         return
     }
 
     try {
-        # Memberships - Add is PUT. [8](https://www.youtube.com/watch?v=jqXss_jArtM)[16](https://learn.microsoft.com/en-us/azure/devops/pipelines/artifacts/pipeline-artifacts?view=azure-devops)
         Invoke-AdoRest -Method PUT -Uri $uri | Out-Null
-        Write-Host "[Graph] Membership added/ensured."
+        Write-Host "[Graph] Membership ensured"
     } catch {
-        $code = Get-HttpStatusCode $_
-        $body = Get-HttpErrorBody $_
-
-        # Treat "already exists" as success (idempotent)
-        if ($code -eq 409 -or ($body -match 'already exists')) {
-            Write-Host "[Graph] Membership already exists (idempotent)."
-            return
-        }
-        Write-Warning "[Graph] Membership add failed (HTTP $code). Body: $body"
+        $body = $_.ErrorDetails.Message
+        if ($body -match 'already exists') { return }
         throw
     }
 }
@@ -525,154 +352,95 @@ if (-not $SkipTeamMembershipGroups) {
 
         $teamGroupDesc = Find-TeamGroupDescriptor -Groups $graphGroups -TeamName $TeamName
         if (-not $teamGroupDesc) {
-            Write-Warning "Team membership group not found for '$TeamName'. Skipping membership updates."
+            Write-Warning "Team membership group not found for '$TeamName'."
         } else {
             foreach ($c in $clients) {
                 foreach ($r in $roles) {
-                        $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
-                        if (-not $roleDesc) {
-                            Write-Warning "Group not found: '$c $r'. Skipping."
-                            continue
-                        }
-                
-                        Add-GraphMembershipIdempotent `
-                            -OrgName $orgName `
-                            -SubjectDescriptor $roleDesc `
-                            -ContainerDescriptor $teamGroupDesc `
-                            -DryRun $DryRun
-                
-                        Write-Host "Ensured: $c $r is in Team '$TeamName'"
+                    $roleDesc = Find-ClientRoleGroupDescriptor -Groups $graphGroups -ClientName $c -RoleName $r
+                    if (-not $roleDesc) {
+                        Write-Warning "Group not found in ADO Graph: '$c $r' (skipping)"
+                        continue
                     }
+                    Add-GraphMembershipIdempotent -OrgName $orgName -SubjectDescriptor $roleDesc -ContainerDescriptor $teamGroupDesc -DryRun $DryRun
+                    Write-Host "Ensured: '$c $r' is in Team '$TeamName'"
+                }
             }
         }
     } catch {
-        Write-Warning "Team membership group configuration encountered an error: $($_.Exception.Message)"
-        # Decide if you want this to fail. For rollout bootstrap, many teams prefer continuing.
-        # throw
+        Write-Warning "Team membership group config error: $($_.Exception.Message)"
     }
-} else {
-    Write-Host "[Graph] Skipped by flag."
 }
 
-# ----------------------------
-# (e) Assign iterations to team (current date forward)
-# - Classification Nodes - Get Iterations tree [12](https://developercommunity.visualstudio.com/t/Graph-APIs-not-working-for-Azure-DevOps/10975063?viewtype=all&stateGroup=active&ftype=problem)
-# - Iterations - List [11](https://oshamrai.wordpress.com/2025/03/30/azure-devops-rest-api-python-8-manage-areas-and-iterations-in-team-projects/)
-# - Iterations - Post Team Iteration [10](https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)
-# ----------------------------
+# =========================
+# WORK: ITERATION ASSIGNMENT (current date forward) — kept as-is; ensure api-version on calls
+# =========================
 function Resolve-YearAndFromDate {
     param([int]$YearOfIteration)
-
     $now = Get-Date
-    $currentYear = $now.Year
-    $year = if ($YearOfIteration -eq 0) { $currentYear } else { $YearOfIteration }
-
-    $fromDate = if ($year -eq $currentYear) { $now.Date } else { (Get-Date -Year $year -Month 1 -Day 1).Date }
-
-    return [pscustomobject]@{
-        Year     = $year
-        YearName = $year.ToString()
-        FromUtc  = $fromDate.ToUniversalTime()
-        FromDate = $fromDate
-    }
+    $year = if ($YearOfIteration -eq 0) { $now.Year } else { $YearOfIteration }
+    $fromDate = if ($year -eq $now.Year) { $now.Date } else { (Get-Date -Year $year -Month 1 -Day 1).Date }
+    [pscustomobject]@{ YearName=$year.ToString(); FromUtc=$fromDate.ToUniversalTime(); FromDate=$fromDate }
 }
 
 function Get-IterationTree {
     param([string]$Org, [string]$ProjectEsc)
-
-    # Classification Nodes - Get with $depth. [12](https://developercommunity.visualstudio.com/t/Graph-APIs-not-working-for-Azure-DevOps/10975063?viewtype=all&stateGroup=active&ftype=problem)
-    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4"
-    return Invoke-AdoRest -Method GET -Uri $uri
+    $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Iterations?`$depth=4&api-version=$ApiVersionWit"  # Classification Nodes Get [6](https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)[2](https://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)
+    Invoke-AdoRest -Method GET -Uri $uri
 }
 
 function Get-TeamIterationIds {
     param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc)
-
-    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations"
+    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations?api-version=$ApiVersionWork"  # Iterations List [15](https://learn.microsoft.com/en-us/rest/api/azure/devops/graph/?view=azure-devops-rest-7.1)
     $resp = Invoke-AdoRest -Method GET -Uri $uri
-
-    # Some responses use 'values' (docs) and some use 'value' in practice; handle both safely. [11](https://oshamrai.wordpress.com/2025/03/30/azure-devops-rest-api-python-8-manage-areas-and-iterations-in-team-projects/)
     $items = @()
     if ($resp.PSObject.Properties.Name -contains 'values') { $items = @($resp.values) }
     elseif ($resp.PSObject.Properties.Name -contains 'value') { $items = @($resp.value) }
-
-    return @($items | ForEach-Object { $_.id })
+    @($items | ForEach-Object { $_.id })
 }
 
 function Add-TeamIteration {
     param([string]$Org, [string]$ProjectEsc, [string]$TeamEsc, [string]$IterationId, [bool]$DryRun)
-
-    # Post Team Iteration expects { id: <uuid> }. [10](https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/rest/samples.md)
-    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations"
-    if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamEsc, "POST Team Iteration $IterationId")) {
-        Write-Host "[Iterations] DryRun/WhatIf: would POST $uri with id=$IterationId"
-        return
-    }
+    $uri = "$Org/$ProjectEsc/$TeamEsc/_apis/work/teamsettings/iterations?api-version=$ApiVersionWork"  # Post Team Iteration [16](https://learn.microsoft.com/en-us/rest/api/azure/devops/graph/groups?view=azure-devops-rest-7.1)
+    if ($DryRun -or -not $PSCmdlet.ShouldProcess($TeamEsc, "Assign Iteration")) { return }
     Invoke-AdoRest -Method POST -Uri $uri -Body @{ id = $IterationId } | Out-Null
 }
 
 if (-not $SkipIterationAssignment) {
-    $yr = Resolve-YearAndFromDate -YearOfIteration $YearOfIteration
-    Write-Host "[Iterations] Target year: $($yr.YearName). FromDate: $($yr.FromDate)"
-
+    # If you later re-add YearOfIteration param, plug it here.
+    # For now, default current-year behavior:
+    $yr = Resolve-YearAndFromDate -YearOfIteration 0
     try {
         $tree = Get-IterationTree -Org $Organization -ProjectEsc $projectEsc
         $yearNode = @($tree.children) | Where-Object { $_.name -eq $yr.YearName } | Select-Object -First 1
-
         if (-not $yearNode) {
-            Write-Warning "Year iteration '$($yr.YearName)' not found under project iterations. Skipping iteration assignment (no failure)."
+            Write-Warning "Year iteration '$($yr.YearName)' not found. Skipping iteration assignment."
         } else {
             $sprints = @($yearNode.children)
-            if ($sprints.Count -eq 0) {
-                Write-Host "[Iterations] No sprints found under year '$($yr.YearName)'. Nothing to assign."
-            } else {
-                # Filter sprints from current date forward
-                $toAssign = @()
-                foreach ($s in $sprints) {
-                    if ($s.attributes -and $s.attributes.startDate) {
-                        $sd = [datetime]$s.attributes.startDate
-                        if ($sd.ToUniversalTime() -ge $yr.FromUtc) { $toAssign += $s }
-                    } else {
-                        $toAssign += $s
-                    }
+            $toAssign = @()
+            foreach ($s in $sprints) {
+                if ($s.attributes -and $s.attributes.startDate) {
+                    $sd = [datetime]$s.attributes.startDate
+                    if ($sd.ToUniversalTime() -ge $yr.FromUtc) { $toAssign += $s }
+                } else {
+                    $toAssign += $s
                 }
+            }
 
-                Write-Host "[Iterations] Sprints under year: $($sprints.Count). After filter: $($toAssign.Count)"
+            $assigned = @()
+            try { $assigned = Get-TeamIterationIds -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc } catch { }
+            $assignedNorm = @($assigned | ForEach-Object { $_.ToString().ToLowerInvariant() })
 
-                $assigned = @()
-                try {
-                    $assigned = Get-TeamIterationIds -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc
-                } catch {
-                    Write-Warning "[Iterations] Could not list already-assigned iterations; will attempt to assign anyway."
-                }
-                $assignedNorm = @($assigned | ForEach-Object { $_.ToString().ToLowerInvariant() })
-
-                foreach ($s in $toAssign) {
-                    $iterId = $s.identifier  # GUID from classification node [12](https://developercommunity.visualstudio.com/t/Graph-APIs-not-working-for-Azure-DevOps/10975063?viewtype=all&stateGroup=active&ftype=problem)
-                    $iterName = $s.name
-                    $iterNorm = $iterId.ToString().ToLowerInvariant()
-
-                    if ($assignedNorm -contains $iterNorm) {
-                        Write-Host "[Iterations] Skipping already assigned: $iterName"
-                        continue
-                    }
-
-                    try {
-                        Add-TeamIteration -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc -IterationId $iterId -DryRun $DryRun
-                        Write-Host "✅ Assigned iteration: $iterName"
-                    } catch {
-                        Write-Warning "Failed assigning iteration '$iterName'. Error: $($_.Exception.Message)"
-                    }
-                }
+            foreach ($s in $toAssign) {
+                $iterId = $s.identifier
+                $iterName = $s.name
+                if ($assignedNorm -contains $iterId.ToString().ToLowerInvariant()) { continue }
+                Add-TeamIteration -Org $Organization -ProjectEsc $projectEsc -TeamEsc $teamEsc -IterationId $iterId -DryRun $DryRun
+                Write-Host "Assigned: $iterName"
             }
         }
     } catch {
-        Write-Warning "[Iterations] Iteration assignment encountered an error: $($_.Exception.Message)"
-        # Choose whether to fail; for rollout bootstrap, often continue.
-        # throw
+        Write-Warning "Iteration assignment error: $($_.Exception.Message)"
     }
-} else {
-    Write-Host "[Iterations] Skipped by flag."
 }
 
-Write-Host "`n✅ Done (bootstrap-team.ps1)."
+Write-Host "`n✅ Done (bootstrap-team.ps1)"
