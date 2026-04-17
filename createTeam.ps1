@@ -158,7 +158,7 @@ function Create-AreaNode {
     }
 
     $uri = "$Org/$ProjectEsc/_apis/wit/classificationnodes/Areas$parentPath?api-version=$ApiVersionWit"   # Classification Nodes CreateOrUpdate tps://medium.com/@kanerika/power-automate-vs-logic-apps-2025-full-comparison-of-microsoft-automation-tools-f569b42f2cea)[7](https://www.linkedin.com/pulse/power-automate-vs-logic-apps-finding-right-microsoft-tool-nishad-owgne)
-
+    Write-Host $uri
     if ($DryRun -or -not $PSCmdlet.ShouldProcess(($fullPath -join '\'), "Create Area Node")) {
         Write-Host "[Area] DryRun/WhatIf: would create $($fullPath -join '\')"
         return
