@@ -427,6 +427,9 @@ if (-not $SkipTeamFieldValues) {
 # =========================
 
 if (-not $SkipTeamMembershipGroups) {
+    
+                    $id = Find-AadGroupObjectIdByDisplayName -DisplayName "AdvocateAurora Developers"
+                    Write-Host "AAD group id: $id"
     try {
         $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
         $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
@@ -440,6 +443,7 @@ if (-not $SkipTeamMembershipGroups) {
                     
                     $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
                     $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
+
 
                     if (-not $oid) {
                         Write-Warning "AAD group not found: '$aadName' (skipping)"
