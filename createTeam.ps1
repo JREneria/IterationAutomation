@@ -466,7 +466,7 @@ if (-not $SkipTeamMembershipGroups) {
                     
                     $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
                     $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
-
+                    Write-Host $oid
 
                     if (-not $oid) {
                         Write-Warning "AAD group not found: '$aadName' (skipping)"
