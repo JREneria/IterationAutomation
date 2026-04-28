@@ -239,6 +239,14 @@ function Find-AadGroupObjectIdByDisplayName {
         [Parameter(Mandatory)][string]$DisplayName
     )
 
+    
+    $payload = Get-JwtPayload -Jwt $GraphAccessToken
+    Write-Host "aud  : $($payload.aud)"
+    Write-Host "tid  : $($payload.tid)"
+    Write-Host "appid: $($payload.appid)"
+    Write-Host "roles: $($payload.roles -join ', ')"
+
+
     # Escape single quotes for OData:  '  ->  ''
     $safe = $DisplayName.Replace("'", "''")
 
