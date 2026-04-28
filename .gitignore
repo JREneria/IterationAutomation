@@ -1,0 +1,14 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/IterationAutomation/copilot-chat/8586d6f2/sessions
+/.vs/IterationAutomation/CopilotIndices/17.14.1601.40145
+/.vs/IterationAutomation/FileContentIndex
+/.vs/IterationAutomation/FileContentIndex/1f6a2a68-8b8a-4873-8172-a54be1c7a894.vsidx
+/.vs/IterationAutomation/FileContentIndex/6b763a26-db00-4cb0-88a1-447b0fff5404.vsidx
+/.vs/IterationAutomation/v17
+/.vs/IterationAutomation/v17/.wsuo
+/.vs/IterationAutomation/v17/DocumentLayout.json
+/.vs/slnx.sqlite
+/.vs/VSWorkspaceState.json
