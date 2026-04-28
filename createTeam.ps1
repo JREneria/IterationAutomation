@@ -453,7 +453,7 @@ if (-not $SkipTeamFieldValues) {
 # =========================
 
 if (-not $SkipTeamMembershipGroups) {
-    try {
+#    try {
         $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
         $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
 
@@ -485,10 +485,10 @@ if (-not $SkipTeamMembershipGroups) {
                 }
             }
         }
-    }
-    catch {
-        Write-Warning "Team membership group config error: $($_.Exception.Message)"
-    }
+  #  }
+  #  catch {
+  #      Write-Warning "Team membership group config error: $($_.Exception.Message)"
+  #  }
 }
 
 # =========================
