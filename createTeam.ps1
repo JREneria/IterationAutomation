@@ -400,7 +400,7 @@ Write-Host "appid : $($payload.appid)"
 Write-Host "roles : $($payload.roles -join ', ')"
 
 $GraphHeaders = @{
-    Authorization = "Bearer $GraphAccessToken"
+    Authorization = "Bearer $($script:GraphAccessToken)"  # must be "Bearer <token>"
     Accept        = "application/json"
 }
 # --- PAT / Auth ---
