@@ -245,7 +245,7 @@ function Find-AadGroupObjectIdByDisplayName {
     }
 
     
-    Invoke-MsGraph -Method GET -Uri "https://graph.microsoft.com/v1.0/groups?`$top=1"
+    Invoke-MsGraph -Method GET -Uri "https://graph.microsoft.com/v1.0/organization"
     $payload = Get-JwtPayload -Jwt $GraphAccessToken
     Write-Host "aud  : $($payload.aud)"
     Write-Host "tid  : $($payload.tid)"
