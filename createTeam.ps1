@@ -239,6 +239,11 @@ function Find-AadGroupObjectIdByDisplayName {
         [Parameter(Mandatory)][string]$DisplayName
     )
 
+    Write-Host "GraphAccessToken length: $($GraphAccessToken.Length)"
+    if ([string]::IsNullOrWhiteSpace($GraphAccessToken)) {
+      throw "GraphAccessToken is empty. Token acquisition failed or variable scope is wrong."
+    }
+
     
     Invoke-MsGraph -Method GET -Uri "https://graph.microsoft.com/v1.0/groups?`$top=1"
     $payload = Get-JwtPayload -Jwt $GraphAccessToken
