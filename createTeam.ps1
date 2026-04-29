@@ -240,6 +240,7 @@ function Find-AadGroupObjectIdByDisplayName {
     )
 
     
+    Invoke-MsGraph -Method GET -Uri "https://graph.microsoft.com/v1.0/groups?`$top=1"
     $payload = Get-JwtPayload -Jwt $GraphAccessToken
     Write-Host "aud  : $($payload.aud)"
     Write-Host "tid  : $($payload.tid)"
@@ -255,7 +256,6 @@ function Find-AadGroupObjectIdByDisplayName {
         '$filter' = "displayName eq '$safe'"
         '$select' = 'id,displayName'
     }
-    Invoke-MsGraph -Method GET -Uri "https://graph.microsoft.com/v1.0/groups?`$top=1"
     $ub = [System.UriBuilder]::new("https://graph.microsoft.com/v1.0/groups")
     $ub.Query = ($query.GetEnumerator() | ForEach-Object {
         # URL-encode each value
