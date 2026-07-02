@@ -481,23 +481,28 @@ if (-not $SkipTeamMembershipGroups) {
                     
                     $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
                     $oids = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
-                    Write-Host $oid
-
+                    
                       if (-not $oids -or $oids.Count -eq 0) {
                         Write-Warning "AAD group not found: '$aadName' (skipping)"
                         continue
                     }
                     foreach ($oid in $oids) {
-                        Write-Host "Processing OID: $oid"
-                        
-                        $mat = Materialize-AadGroupInAdoGraph -OrgName $orgName -AadObjectId $oid -DisplayName $aadName
+                        Write-Host "Processing OID: $oid for '$aadName'"
+                        # Add ObjectId suffix only if there are multiple matches
+                        $displayNameToUse = if ($oids.Count -gt 1) {
+                            "$aadName ($(($oid).Substring(0,8)))"
+                        } else {
+                            $aadName
+                        }
+    
+                        $mat = Materialize-AadGroupInAdoGraph -OrgName $orgName -AadObjectId $oid -DisplayName $displayNameToUse
                         if (-not $mat -or -not $mat.descriptor) {
-                            Write-Warning "Failed to materialize '$aadName' (OID: $oid) into ADO Graph (skipping)"
+                            Write-Warning "Failed to materialize '$displayNameToUse' (OID: $oid) into ADO Graph (skipping)"
                             continue
                         }
 
                         Add-GraphMembership -OrgName $orgName -SubjectDescriptor $mat.descriptor -ContainerDescriptor $teamGroupDesc
-                        Write-Host "Added '$aadName' (OID: $oid) to Team '$TeamName'"
+                        Write-Host "Added '$displayNameToUse' to Team '$TeamName'"
                     }
                 }
             }
