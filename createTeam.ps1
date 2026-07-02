@@ -271,8 +271,9 @@ function Find-AadGroupObjectIdByDisplayName {
     Write-Host "[MS Graph] GET $uri"
     $resp = Invoke-MsGraph -Method GET -Uri $uri
 
-    if (-not $resp.value -or $resp.value.Count -eq 0) { return $null }
-    return $resp.value[0].id
+    # Return all matching group IDs
+    if (-not $resp.value -or $resp.value.Count -eq 0) { return @() }
+    return $resp.value | ForEach-Object { $_.id }
 }
 
 function Materialize-AadGroupInAdoGraph {
@@ -466,7 +467,7 @@ if (-not $SkipTeamFieldValues) {
 # =========================
 
 if (-not $SkipTeamMembershipGroups) {
-#    try {
+    try {
         $scopeDesc = Get-ProjectScopeDescriptor -OrgName $orgName -ProjectId $projectId
         $graphGroups = Get-GraphGroupsInScope -OrgName $orgName -ScopeDescriptor $scopeDesc
 
@@ -475,33 +476,36 @@ if (-not $SkipTeamMembershipGroups) {
             Write-Warning "Team membership group not found for '$TeamName'."
         } else {
             foreach ($c in $clients) {
+
                 foreach ($r in $roles) {
                     
                     $aadName = "$c $r"   # e.g. "AdvocateAurora Developers"
-                    $oid = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
+                    $oids = Find-AadGroupObjectIdByDisplayName -DisplayName $aadName
                     Write-Host $oid
 
-                    if (-not $oid) {
+                      if (-not $oids -or $oids.Count -eq 0) {
                         Write-Warning "AAD group not found: '$aadName' (skipping)"
                         continue
                     }
+                    foreach ($oid in $oids) {
+                        Write-Host "Processing OID: $oid"
+                        
+                        $mat = Materialize-AadGroupInAdoGraph -OrgName $orgName -AadObjectId $oid -DisplayName $aadName
+                        if (-not $mat -or -not $mat.descriptor) {
+                            Write-Warning "Failed to materialize '$aadName' (OID: $oid) into ADO Graph (skipping)"
+                            continue
+                        }
 
-                    $mat = Materialize-AadGroupInAdoGraph -OrgName $orgName -AadObjectId $oid -DisplayName $aadName
-                    if (-not $mat -or -not $mat.descriptor) {
-                        Write-Warning "Failed to materialize '$aadName' into ADO Graph (skipping)"
-                        continue
+                        Add-GraphMembership -OrgName $orgName -SubjectDescriptor $mat.descriptor -ContainerDescriptor $teamGroupDesc
+                        Write-Host "Added '$aadName' (OID: $oid) to Team '$TeamName'"
                     }
-
-                    Add-GraphMembership -OrgName $orgName -SubjectDescriptor $mat.descriptor -ContainerDescriptor $teamGroupDesc
-                    Write-Host "Added '$aadName' to Team '$TeamName'"
-
                 }
             }
         }
-  #  }
-  #  catch {
-  #      Write-Warning "Team membership group config error: $($_.Exception.Message)"
-  #  }
+    }
+    catch {
+        Write-Warning "Team membership group config error: $($_.Exception.Message)"
+    }
 }
 
 # =========================
